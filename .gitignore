@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.env
+uploads/
+
+# IDE
+.idea/
+.vscode/
+
+# projects_manager
+**/.projects-manager
+
+# OS
+.DS_Store
