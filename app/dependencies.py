@@ -1,9 +1,8 @@
-from dataclasses import dataclass
-
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.core.current_user import CurrentUser
 from app.core.exceptions import ForbiddenError, UnauthorizedError
 from app.core.security import decode_token
 from app.database import get_db
@@ -11,14 +10,11 @@ from app.models.user import User
 
 security = HTTPBearer(auto_error=False)
 
-
-@dataclass
-class CurrentUser:
-    id: int
-    store_id: int
-    username: str
-    name: str
-    role: str
+SUBSCRIPTION_EXEMPT_PREFIXES = (
+    "/api/v1/auth",
+    "/api/v1/subscription",
+    "/api/v1/admin",
+)
 
 
 def get_current_user(
@@ -53,3 +49,19 @@ def require_roles(*roles: str):
         return current_user
 
     return checker
+
+
+def require_writable_subscription(
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CurrentUser:
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return current_user
+    path = request.url.path
+    if any(path.startswith(prefix) for prefix in SUBSCRIPTION_EXEMPT_PREFIXES):
+        return current_user
+    from app.services.subscription_service import SubscriptionService
+
+    SubscriptionService.ensure_can_write(db, current_user.store_id)
+    return current_user

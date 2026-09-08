@@ -30,4 +30,5 @@ class Store(Base, TimestampMixin, SoftDeleteMixin):
     logo_url: Mapped[str | None] = mapped_column(String(500))
     status: Mapped[int] = mapped_column(SmallInteger, default=1)
     plan: Mapped[str] = mapped_column(String(20), default="basic")
+    subscription_status: Mapped[str] = mapped_column(String(20), default="trial")
     expired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

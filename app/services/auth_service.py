@@ -16,6 +16,37 @@ from app.schemas.auth import LoginRequest, TokenResponse, UserInfo
 
 class AuthService:
     @staticmethod
+    def build_user_info(db: Session, user: User) -> UserInfo:
+        from app.schemas.auth import StoreBrief, SubscriptionBrief
+        from app.services.subscription_service import SubscriptionService
+
+        store = db.query(Store).filter(Store.id == user.store_id).first()
+        sub = SubscriptionService.get_store_status(db, store) if store else None
+        return UserInfo(
+            id=user.id,
+            store_id=user.store_id,
+            username=user.username,
+            name=user.name,
+            phone=user.phone,
+            role=user.role,
+            avatar_url=user.avatar_url,
+            store=StoreBrief.model_validate(store) if store else None,
+            subscription=SubscriptionBrief(
+                status=sub.status,
+                status_label=sub.status_label,
+                plan=sub.plan,
+                plan_name=sub.plan_name,
+                expired_at=sub.expired_at,
+                days_remaining=sub.days_remaining,
+                is_active=sub.is_active,
+                can_write=sub.can_write,
+                message=sub.message,
+            )
+            if sub
+            else None,
+        )
+
+    @staticmethod
     def login(db: Session, data: LoginRequest) -> TokenResponse:
         user = (
             db.query(User)
@@ -38,7 +69,7 @@ class AuthService:
         return TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
-            user=UserInfo.model_validate(user),
+            user=AuthService.build_user_info(db, user),
         )
 
     @staticmethod
@@ -56,7 +87,7 @@ class AuthService:
         return TokenResponse(
             access_token=access_token,
             refresh_token=new_refresh_token,
-            user=UserInfo.model_validate(user),
+            user=AuthService.build_user_info(db, user),
         )
 
     @staticmethod
@@ -64,7 +95,7 @@ class AuthService:
         user = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
         if user is None:
             raise NotFoundError("用户不存在")
-        return UserInfo.model_validate(user)
+        return AuthService.build_user_info(db, user)
 
 
 class SeedService:
@@ -75,8 +106,15 @@ class SeedService:
         store = db.query(Store).filter(Store.code == "demo").first()
         if store is None:
             store = Store(name="演示汽修店", code="demo", phone="400-000-0000", address="演示地址")
+            from app.services.subscription_service import SubscriptionService
+
+            SubscriptionService.init_trial_store(store)
             db.add(store)
             db.flush()
+        elif store.expired_at is None and getattr(store, "subscription_status", "trial") != "lifetime":
+            from app.services.subscription_service import SubscriptionService
+
+            SubscriptionService.init_trial_store(store)
 
         user = (
             db.query(User)

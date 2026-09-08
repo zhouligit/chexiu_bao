@@ -49,6 +49,9 @@ class StoreService:
             phone=data.store_phone,
             address=data.store_address,
         )
+        from app.services.subscription_service import SubscriptionService
+
+        SubscriptionService.init_trial_store(store)
         db.add(store)
         db.flush()
 

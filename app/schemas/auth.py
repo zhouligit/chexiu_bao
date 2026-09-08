@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -18,6 +20,18 @@ class StoreBrief(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SubscriptionBrief(BaseModel):
+    status: str
+    status_label: str
+    plan: str
+    plan_name: str
+    expired_at: datetime | None = None
+    days_remaining: int | None = None
+    is_active: bool
+    can_write: bool
+    message: str | None = None
+
+
 class UserInfo(BaseModel):
     id: int
     store_id: int
@@ -27,6 +41,7 @@ class UserInfo(BaseModel):
     role: str
     avatar_url: str | None = None
     store: StoreBrief | None = None
+    subscription: SubscriptionBrief | None = None
 
     model_config = {"from_attributes": True}
 
