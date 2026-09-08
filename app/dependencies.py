@@ -53,15 +53,27 @@ def require_roles(*roles: str):
 
 def require_writable_subscription(
     request: Request,
-    current_user: CurrentUser = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db),
-) -> CurrentUser:
+) -> None:
     if request.method in ("GET", "HEAD", "OPTIONS"):
-        return current_user
+        return
     path = request.url.path
     if any(path.startswith(prefix) for prefix in SUBSCRIPTION_EXEMPT_PREFIXES):
-        return current_user
+        return
+
+    if credentials is None or not credentials.credentials:
+        raise UnauthorizedError()
+
+    payload = decode_token(credentials.credentials, expected_type="access")
+    user_id = payload.get("user_id")
+    if user_id is None:
+        raise UnauthorizedError()
+
+    user = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
+    if user is None or user.status != 1:
+        raise UnauthorizedError("用户不存在或已禁用")
+
     from app.services.subscription_service import SubscriptionService
 
-    SubscriptionService.ensure_can_write(db, current_user.store_id)
-    return current_user
+    SubscriptionService.ensure_can_write(db, user.store_id)
