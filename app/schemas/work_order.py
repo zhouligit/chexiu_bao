@@ -124,7 +124,7 @@ class WorkOrderDetail(BaseModel):
     id: int
     order_no: str
     status: str
-    status_label: str
+    status_label: str = ""
     customer_id: int
     vehicle_id: int
     customer: CustomerBrief | None = None
