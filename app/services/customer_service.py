@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -98,7 +98,7 @@ class CustomerService:
     @staticmethod
     def delete_customer(db: Session, current_user: CurrentUser, customer_id: int) -> None:
         customer = CustomerService._get_customer_or_404(db, current_user, customer_id)
-        customer.deleted_at = datetime.now(UTC)
+        customer.deleted_at = datetime.now(timezone.utc)
         db.commit()
 
     @staticmethod

@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
@@ -22,7 +22,7 @@ class InventoryService:
             .first()
         )
         if not inv:
-            inv = Inventory(store_id=store_id, part_id=part_id, quantity=0, locked_quantity=0, updated_at=datetime.now(UTC))
+            inv = Inventory(store_id=store_id, part_id=part_id, quantity=0, locked_quantity=0, updated_at=datetime.now(timezone.utc))
             db.add(inv)
             db.flush()
         return inv
@@ -53,7 +53,7 @@ class InventoryService:
                 ref_id=ref_id,
                 remark=remark,
                 operator_id=operator_id,
-                created_at=datetime.now(UTC),
+                created_at=datetime.now(timezone.utc),
             )
         )
 
@@ -160,7 +160,7 @@ class InventoryService:
 
         before = inv.quantity
         inv.quantity += data.quantity
-        inv.updated_at = datetime.now(UTC)
+        inv.updated_at = datetime.now(timezone.utc)
 
         if data.unit_cost is not None:
             total_cost = (inv.avg_cost or Decimal("0")) * before + data.unit_cost * data.quantity
@@ -193,7 +193,7 @@ class InventoryService:
 
         before_locked = inv.locked_quantity
         inv.locked_quantity += quantity
-        inv.updated_at = datetime.now(UTC)
+        inv.updated_at = datetime.now(timezone.utc)
 
         InventoryService._log(
             db,
@@ -219,7 +219,7 @@ class InventoryService:
 
         before_locked = inv.locked_quantity
         inv.locked_quantity -= unlock_qty
-        inv.updated_at = datetime.now(UTC)
+        inv.updated_at = datetime.now(timezone.utc)
 
         InventoryService._log(
             db,
@@ -248,7 +248,7 @@ class InventoryService:
         before_qty = inv.quantity
         inv.locked_quantity -= quantity
         inv.quantity -= quantity
-        inv.updated_at = datetime.now(UTC)
+        inv.updated_at = datetime.now(timezone.utc)
 
         InventoryService._log(
             db,
@@ -269,7 +269,7 @@ class InventoryService:
         inv = InventoryService.get_inventory(db, current_user.store_id, part_id)
         before = inv.quantity
         inv.quantity += quantity
-        inv.updated_at = datetime.now(UTC)
+        inv.updated_at = datetime.now(timezone.utc)
 
         InventoryService._log(
             db,

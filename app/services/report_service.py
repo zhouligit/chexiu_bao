@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -13,7 +13,7 @@ from app.services.inventory_service import InventoryService
 class ReportService:
     @staticmethod
     def _day_range(target: date) -> tuple[datetime, datetime]:
-        start = datetime(target.year, target.month, target.day, tzinfo=UTC)
+        start = datetime(target.year, target.month, target.day, tzinfo=timezone.utc)
         end = start + timedelta(days=1)
         return start, end
 
@@ -127,7 +127,7 @@ class ReportService:
     ) -> list[ServiceAnalysisItem]:
         days = min(max(days, 1), 365)
         store_id = current_user.store_id
-        since = datetime.now(UTC) - timedelta(days=days)
+        since = datetime.now(timezone.utc) - timedelta(days=days)
 
         rows = (
             db.query(
@@ -164,7 +164,7 @@ class ReportService:
         today = ReportService.daily_report(db, current_user)
         store_id = current_user.store_id
 
-        month_start = datetime.now(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         month_revenue = (
             db.query(func.coalesce(func.sum(WorkOrder.paid_amount), 0))
             .filter(

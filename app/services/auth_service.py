@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -27,7 +27,7 @@ class AuthService:
         if user.status != 1:
             raise UnauthorizedError("账号已禁用")
 
-        user.last_login_at = datetime.now(UTC)
+        user.last_login_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(user)
 

@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy.orm import Session, joinedload
@@ -171,7 +171,7 @@ class WorkOrderService:
             raise BadRequestError("请先添加服务项目再提交报价")
 
         if to_status == "pending_settle":
-            work_order.finished_at = datetime.now(UTC)
+            work_order.finished_at = datetime.now(timezone.utc)
 
         if to_status == "in_progress":
             WorkOrderService._pick_pending_parts(db, current_user, work_order)
@@ -283,7 +283,7 @@ class WorkOrderService:
             payable_amount=work_order.payable_amount,
             paid_amount=paid_total,
             cashier_id=current_user.id,
-            settled_at=datetime.now(UTC),
+            settled_at=datetime.now(timezone.utc),
         )
         db.add(payment)
         db.flush()
@@ -294,12 +294,12 @@ class WorkOrderService:
                     payment_id=payment.id,
                     method=p.method,
                     amount=p.amount,
-                    created_at=datetime.now(UTC),
+                    created_at=datetime.now(timezone.utc),
                 )
             )
 
         work_order.paid_amount = paid_total
-        work_order.settled_at = datetime.now(UTC)
+        work_order.settled_at = datetime.now(timezone.utc)
         from_status = work_order.status
         work_order.status = "completed"
         WorkOrderService._add_log(db, work_order.id, from_status, "completed", current_user.id, "结算完成")
@@ -308,7 +308,7 @@ class WorkOrderService:
         if customer:
             customer.total_spent += work_order.paid_amount
             customer.visit_count += 1
-            customer.last_visit_at = datetime.now(UTC)
+            customer.last_visit_at = datetime.now(timezone.utc)
 
         db.commit()
         return WorkOrderService.get_detail(db, current_user, order_id)
@@ -374,7 +374,7 @@ class WorkOrderService:
                 to_status=to_status,
                 operator_id=operator_id,
                 remark=remark,
-                created_at=datetime.now(UTC),
+                created_at=datetime.now(timezone.utc),
             )
         )
 
