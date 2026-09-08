@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import BadRequestError, NotFoundError
 from app.dependencies import CurrentUser
 from app.models.supplier import WorkOrderInspection
-from app.models.work_order import WO_PENDING_INSPECTION, WO_PENDING_QUOTE, WorkOrder
+from app.models.work_order import WO_PENDING_INSPECTION, WO_PENDING_QUOTE, WO_IN_PROGRESS, WO_PENDING_QC, WorkOrder
 from app.schemas.inspection import (
     DEFAULT_PRE_CHECK_ITEMS,
     InspectionResponse,
@@ -19,11 +19,16 @@ class InspectionService:
         return DEFAULT_PRE_CHECK_ITEMS.copy()
 
     @staticmethod
-    def get_inspection(db: Session, current_user: CurrentUser, order_id: int) -> InspectionResponse | None:
+    def get_inspection(
+        db: Session, current_user: CurrentUser, order_id: int, inspection_type: str = "pre_check"
+    ) -> InspectionResponse | None:
         InspectionService._get_order_or_404(db, current_user, order_id)
         record = (
             db.query(WorkOrderInspection)
-            .filter(WorkOrderInspection.work_order_id == order_id, WorkOrderInspection.type == "pre_check")
+            .filter(
+                WorkOrderInspection.work_order_id == order_id,
+                WorkOrderInspection.type == inspection_type,
+            )
             .order_by(WorkOrderInspection.id.desc())
             .first()
         )
@@ -36,8 +41,15 @@ class InspectionService:
         db: Session, current_user: CurrentUser, order_id: int, data: InspectionSubmit
     ) -> InspectionResponse:
         work_order = InspectionService._get_order_or_404(db, current_user, order_id)
-        if work_order.status not in (WO_PENDING_INSPECTION, WO_PENDING_QUOTE):
-            raise BadRequestError("当前状态不可提交预检")
+
+        if data.type == "pre_check":
+            if work_order.status not in (WO_PENDING_INSPECTION, WO_PENDING_QUOTE):
+                raise BadRequestError("当前状态不可提交预检")
+        elif data.type == "construction":
+            if work_order.status not in (WO_IN_PROGRESS, WO_PENDING_QC):
+                raise BadRequestError("当前状态不可上传施工照片")
+        else:
+            raise BadRequestError("不支持的检查类型")
 
         items_data = [item.model_dump() for item in data.items]
         existing = (
@@ -65,7 +77,7 @@ class InspectionService:
             )
             db.add(record)
 
-        if data.finish and work_order.status == WO_PENDING_INSPECTION:
+        if data.finish and data.type == "pre_check" and work_order.status == WO_PENDING_INSPECTION:
             from app.services.work_order_service import WorkOrderService
 
             WorkOrderService._add_log(

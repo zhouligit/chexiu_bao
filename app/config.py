@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     storage_type: str = "local"
     storage_local_path: str = "./uploads"
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    baidu_ocr_api_key: str | None = None
+    baidu_ocr_secret_key: str | None = None
 
     @property
     def cors_origin_list(self) -> list[str]:

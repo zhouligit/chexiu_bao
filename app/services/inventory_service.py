@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.dependencies import CurrentUser
 from app.models.inventory import Inventory, InventoryLog, Part
-from app.schemas.inventory import PartCreate, PartWithStock, StockInRequest
+from app.schemas.inventory import InventoryLogResponse, PartCreate, PartUpdate, PartWithStock, StockInRequest, StockOutRequest
 
 
 class InventoryService:
@@ -152,6 +152,94 @@ class InventoryService:
         db.commit()
         items = InventoryService.list_parts(db, current_user)
         return next(i for i in items if i.id == part.id)
+
+    @staticmethod
+    def update_part(db: Session, current_user: CurrentUser, part_id: int, data: PartUpdate) -> PartWithStock:
+        part = InventoryService._get_part_or_404(db, current_user, part_id)
+
+        if data.code is not None and data.code != part.code:
+            exists = (
+                db.query(Part)
+                .filter(
+                    Part.store_id == current_user.store_id,
+                    Part.code == data.code,
+                    Part.deleted_at.is_(None),
+                    Part.id != part_id,
+                )
+                .first()
+            )
+            if exists:
+                raise ConflictError("配件编码已存在")
+
+        for field in ("name", "code", "brand", "spec", "unit", "purchase_price", "sell_price", "safe_stock"):
+            value = getattr(data, field)
+            if value is not None:
+                setattr(part, field, value)
+
+        db.commit()
+        items = InventoryService.list_parts(db, current_user)
+        return next(i for i in items if i.id == part.id)
+
+    @staticmethod
+    def stock_out(db: Session, current_user: CurrentUser, data: StockOutRequest) -> PartWithStock:
+        part = InventoryService._get_part_or_404(db, current_user, data.part_id)
+        inv = InventoryService.get_inventory(db, current_user.store_id, part.id)
+        available = InventoryService.available_quantity(inv)
+        if data.quantity > available:
+            raise BadRequestError(f"「{part.name}」可用库存不足，当前可用 {available}")
+
+        before = inv.quantity
+        inv.quantity -= data.quantity
+        inv.updated_at = datetime.now(timezone.utc)
+
+        InventoryService._log(
+            db,
+            current_user.store_id,
+            part.id,
+            "out",
+            -data.quantity,
+            before,
+            inv.quantity,
+            current_user.id,
+            remark=data.remark or "手动出库",
+        )
+        db.commit()
+        items = InventoryService.list_parts(db, current_user)
+        return next(i for i in items if i.id == part.id)
+
+    @staticmethod
+    def list_logs(
+        db: Session,
+        current_user: CurrentUser,
+        part_id: int | None = None,
+        limit: int = 100,
+    ) -> list[InventoryLogResponse]:
+        query = (
+            db.query(InventoryLog, Part.name)
+            .join(Part, Part.id == InventoryLog.part_id)
+            .filter(InventoryLog.store_id == current_user.store_id)
+            .order_by(InventoryLog.id.desc())
+        )
+        if part_id:
+            query = query.filter(InventoryLog.part_id == part_id)
+
+        rows = query.limit(min(limit, 500)).all()
+        return [
+            InventoryLogResponse(
+                id=log.id,
+                part_id=log.part_id,
+                part_name=part_name,
+                type=log.type,
+                quantity=log.quantity,
+                before_qty=log.before_qty,
+                after_qty=log.after_qty,
+                ref_type=log.ref_type,
+                ref_id=log.ref_id,
+                remark=log.remark,
+                created_at=log.created_at,
+            )
+            for log, part_name in rows
+        ]
 
     @staticmethod
     def stock_in(db: Session, current_user: CurrentUser, data: StockInRequest) -> PartWithStock:

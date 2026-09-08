@@ -23,6 +23,23 @@ class StockInRequest(BaseModel):
     remark: str | None = None
 
 
+class StockOutRequest(BaseModel):
+    part_id: int
+    quantity: int = Field(gt=0)
+    remark: str | None = None
+
+
+class PartUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    code: str | None = Field(default=None, max_length=32)
+    brand: str | None = None
+    spec: str | None = None
+    unit: str | None = None
+    purchase_price: Decimal | None = Field(default=None, ge=0)
+    sell_price: Decimal | None = Field(default=None, ge=0)
+    safe_stock: int | None = Field(default=None, ge=0)
+
+
 class PartWithStock(BaseModel):
     id: int
     store_id: int
@@ -47,6 +64,7 @@ class PartWithStock(BaseModel):
 class InventoryLogResponse(BaseModel):
     id: int
     part_id: int
+    part_name: str | None = None
     type: str
     quantity: int
     before_qty: int
@@ -57,3 +75,11 @@ class InventoryLogResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+LOG_TYPE_LABELS = {
+    "in": "入库",
+    "out": "出库",
+    "lock": "锁定",
+    "unlock": "释放",
+}

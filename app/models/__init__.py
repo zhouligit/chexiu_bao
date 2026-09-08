@@ -5,6 +5,7 @@ from app.models.service_item import ServiceCategory, ServiceItem
 from app.models.store import Store
 from app.models.supplier import Supplier, WorkOrderInspection
 from app.models.user import User
+from app.models.work_bay import WorkBay
 from app.models.work_order import WorkOrder, WorkOrderItem, WorkOrderLog, WorkOrderPart
 
 __all__ = [
@@ -19,6 +20,7 @@ __all__ = [
     "InventoryLog",
     "Supplier",
     "WorkOrderInspection",
+    "WorkBay",
     "WorkOrder",
     "WorkOrderItem",
     "WorkOrderPart",

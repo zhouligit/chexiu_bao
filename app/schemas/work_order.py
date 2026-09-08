@@ -20,7 +20,11 @@ class WorkOrderItemCreate(BaseModel):
     unit_price: Decimal = Field(ge=0)
     discount: Decimal = Field(default=Decimal("100"), ge=0, le=100)
     labor_hours: Decimal | None = None
-    type: str = "normal"
+    type: str = Field(default="normal", pattern="^(normal|addon)$")
+
+
+class WorkOrderItemStatusUpdate(BaseModel):
+    status: str = Field(pattern="^(pending|in_progress|paused|completed)$")
 
 
 class WorkOrderPartCreate(BaseModel):
@@ -38,10 +42,12 @@ class StatusTransition(BaseModel):
 class AssignRequest(BaseModel):
     technician_id: int
     item_ids: list[int] | None = None
+    work_bay_id: int | None = None
 
 
 class SettleRequest(BaseModel):
     discount_amount: Decimal = Field(default=Decimal("0"), ge=0)
+    round_down_amount: Decimal = Field(default=Decimal("0"), ge=0)
     payments: list["PaymentMethodInput"] = Field(min_length=1)
 
 
@@ -101,6 +107,11 @@ class VehicleBrief(BaseModel):
     brand: str | None = None
     model: str | None = None
 
+
+class WorkBayBrief(BaseModel):
+    id: int
+    name: str
+
     model_config = {"from_attributes": True}
 
 
@@ -134,6 +145,8 @@ class WorkOrderDetail(BaseModel):
     customer_request: str | None = None
     internal_note: str | None = None
     receptionist_id: int | None = None
+    work_bay_id: int | None = None
+    work_bay: WorkBayBrief | None = None
     total_amount: float
     discount_amount: float
     payable_amount: float

@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.router import api_router
 from app.config import get_settings
@@ -40,6 +41,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(api_router)
+app.mount("/uploads", StaticFiles(directory=settings.storage_local_path), name="uploads")
 
 
 @app.exception_handler(AppError)

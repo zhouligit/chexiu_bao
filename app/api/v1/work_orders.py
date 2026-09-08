@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.orm import Session
 
 from app.core.response import success
@@ -14,6 +14,7 @@ from app.schemas.work_order import (
     StatusTransition,
     WorkOrderCreate,
     WorkOrderItemCreate,
+    WorkOrderItemStatusUpdate,
     WorkOrderPartCreate,
 )
 from app.services.inspection_service import InspectionService
@@ -80,6 +81,29 @@ def add_item(
     return success(detail.model_dump())
 
 
+@router.post("/{order_id}/items/{item_id}/confirm")
+def confirm_addon_item(
+    order_id: int,
+    item_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    detail = WorkOrderService.confirm_addon_item(db, current_user, order_id, item_id)
+    return success(detail.model_dump())
+
+
+@router.put("/{order_id}/items/{item_id}/status")
+def update_item_status(
+    order_id: int,
+    item_id: int,
+    data: WorkOrderItemStatusUpdate,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    detail = WorkOrderService.update_item_status(db, current_user, order_id, item_id, data.status)
+    return success(detail.model_dump())
+
+
 @router.post("/{order_id}/parts")
 def add_part(
     order_id: int,
@@ -116,12 +140,15 @@ def assign_technician(
 @router.get("/{order_id}/inspection")
 def get_inspection(
     order_id: int,
+    type: str = Query("pre_check", alias="type"),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    record = InspectionService.get_inspection(db, current_user, order_id)
+    record = InspectionService.get_inspection(db, current_user, order_id, type)
     if record is None:
-        return success({"items": InspectionService.get_default_items()})
+        if type == "pre_check":
+            return success({"items": InspectionService.get_default_items(), "photos": []})
+        return success({"items": [], "photos": []})
     return success(record.model_dump())
 
 
@@ -145,6 +172,28 @@ def print_work_order(
 ):
     html = PrintService.render_html(db, current_user, order_id, type)
     return HTMLResponse(content=html)
+
+
+@router.get("/{order_id}/print/pdf")
+def print_work_order_pdf(
+    order_id: int,
+    type: str = Query("quote", alias="type"),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    detail = WorkOrderService.get_detail(db, current_user, order_id)
+    try:
+        pdf_bytes = PrintService.render_pdf(db, current_user, order_id, type)
+    except RuntimeError as exc:
+        from app.core.exceptions import BadRequestError
+
+        raise BadRequestError(str(exc)) from exc
+    filename = PrintService.pdf_filename(detail.order_no, type)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 service_router = APIRouter(prefix="/service-items", tags=["服务项目"])

@@ -8,8 +8,10 @@ from app.dependencies import CurrentUser
 from app.models.customer import Customer, Vehicle
 from app.models.payment import Payment, PaymentDetail
 from app.services.inventory_service import InventoryService
+from app.services.work_bay_service import WorkBayService
 from app.models.inventory import Part
 from app.models.service_item import ServiceItem
+from app.models.work_bay import WorkBay
 from app.models.work_order import (
     WO_STATUS_LABELS,
     WO_TRANSITIONS,
@@ -159,6 +161,14 @@ class WorkOrderService:
                 "brand": vehicle.brand,
                 "model": vehicle.model,
             }
+        if work_order.work_bay_id:
+            bay = (
+                db.query(WorkBay)
+                .filter(WorkBay.id == work_order.work_bay_id, WorkBay.store_id == current_user.store_id)
+                .first()
+            )
+            if bay:
+                detail.work_bay = {"id": bay.id, "name": bay.name}
         return detail
 
     @staticmethod
@@ -179,6 +189,8 @@ class WorkOrderService:
 
         if to_status == "cancelled":
             WorkOrderService._release_parts_on_cancel(db, current_user, work_order)
+            WorkBayService.release_from_order(db, work_order)
+            work_order.work_bay_id = None
 
         from_status = work_order.status
         work_order.status = to_status
@@ -189,8 +201,15 @@ class WorkOrderService:
     @staticmethod
     def add_item(db: Session, current_user: CurrentUser, order_id: int, data: WorkOrderItemCreate):
         work_order = WorkOrderService._get_order_or_404(db, current_user, order_id)
-        if work_order.status not in ("pending_quote", "pending_confirm", "in_progress"):
+
+        if data.type == "addon":
+            if work_order.status != "in_progress":
+                raise BadRequestError("增项只能在施工中添加")
+            item_status = "pending_confirm"
+        elif work_order.status not in ("pending_quote", "pending_confirm", "in_progress"):
             raise BadRequestError("当前状态不可添加项目")
+        else:
+            item_status = "pending"
 
         amount = WorkOrderService._calc_item_amount(data.quantity, data.unit_price, data.discount)
         item = WorkOrderItem(
@@ -203,11 +222,71 @@ class WorkOrderService:
             amount=amount,
             labor_hours=data.labor_hours,
             type=data.type,
+            status=item_status,
         )
         db.add(item)
         db.flush()
         db.refresh(work_order, ["items", "parts"])
         WorkOrderService._recalc_amounts(work_order)
+        if data.type == "addon":
+            WorkOrderService._add_log(
+                db, work_order.id, work_order.status, work_order.status, current_user.id, f"新增增项：{data.name}"
+            )
+        db.commit()
+        return WorkOrderService.get_detail(db, current_user, order_id)
+
+    @staticmethod
+    def confirm_addon_item(db: Session, current_user: CurrentUser, order_id: int, item_id: int):
+        work_order = WorkOrderService._get_order_or_404(db, current_user, order_id)
+        item = next((i for i in work_order.items if i.id == item_id), None)
+        if item is None:
+            raise NotFoundError("项目不存在")
+        if item.type != "addon" or item.status != "pending_confirm":
+            raise BadRequestError("该项目不是待确认的增项")
+
+        item.status = "pending"
+        WorkOrderService._add_log(
+            db, work_order.id, work_order.status, work_order.status, current_user.id, f"客户确认增项：{item.name}"
+        )
+        db.commit()
+        return WorkOrderService.get_detail(db, current_user, order_id)
+
+    @staticmethod
+    def update_item_status(
+        db: Session, current_user: CurrentUser, order_id: int, item_id: int, status: str
+    ):
+        transitions = {
+            "pending": {"in_progress"},
+            "in_progress": {"paused", "completed"},
+            "paused": {"in_progress"},
+        }
+        work_order = WorkOrderService._get_order_or_404(db, current_user, order_id)
+        if work_order.status not in ("in_progress", "pending_qc"):
+            raise BadRequestError("当前工单状态不可更新项目进度")
+
+        item = next((i for i in work_order.items if i.id == item_id), None)
+        if item is None:
+            raise NotFoundError("项目不存在")
+        if item.status == "pending_confirm":
+            raise BadRequestError("增项需先经客户确认")
+        allowed = transitions.get(item.status, set())
+        if status not in allowed:
+            raise BadRequestError(f"不能从「{item.status}」变更为「{status}」")
+
+        item.status = status
+        labels = {
+            "in_progress": "开工",
+            "paused": "暂停",
+            "completed": "完工",
+        }
+        WorkOrderService._add_log(
+            db,
+            work_order.id,
+            work_order.status,
+            work_order.status,
+            current_user.id,
+            f"项目「{item.name}」{labels.get(status, status)}",
+        )
         db.commit()
         return WorkOrderService.get_detail(db, current_user, order_id)
 
@@ -267,7 +346,11 @@ class WorkOrderService:
 
         WorkOrderService._pick_pending_parts(db, current_user, work_order)
 
-        work_order.discount_amount = data.discount_amount
+        total_discount = data.discount_amount + data.round_down_amount
+        if total_discount > work_order.total_amount:
+            raise BadRequestError("折扣与抹零不能超过合计金额")
+
+        work_order.discount_amount = total_discount
         WorkOrderService._recalc_amounts(work_order)
 
         paid_total = sum((p.amount for p in data.payments), Decimal("0"))
@@ -303,6 +386,8 @@ class WorkOrderService:
         work_order.settled_at = datetime.now(timezone.utc)
         from_status = work_order.status
         work_order.status = "completed"
+        WorkBayService.release_from_order(db, work_order)
+        work_order.work_bay_id = None
         WorkOrderService._add_log(db, work_order.id, from_status, "completed", current_user.id, "结算完成")
 
         customer = db.query(Customer).filter(Customer.id == work_order.customer_id).first()
@@ -342,6 +427,12 @@ class WorkOrderService:
                 updated = True
         if not updated:
             raise BadRequestError("没有可派工的项目")
+
+        if data.work_bay_id:
+            if work_order.work_bay_id and work_order.work_bay_id != data.work_bay_id:
+                WorkBayService.release_from_order(db, work_order)
+            WorkBayService.assign_to_order(db, current_user, data.work_bay_id, work_order.id)
+            work_order.work_bay_id = data.work_bay_id
 
         db.commit()
         return WorkOrderService.get_detail(db, current_user, order_id)

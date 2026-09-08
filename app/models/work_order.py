@@ -59,6 +59,7 @@ class WorkOrder(Base, TimestampMixin, SoftDeleteMixin):
     estimated_finish_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    work_bay_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
 
     items = relationship("WorkOrderItem", back_populates="work_order", lazy="selectin")
     parts = relationship("WorkOrderPart", back_populates="work_order", lazy="selectin")
