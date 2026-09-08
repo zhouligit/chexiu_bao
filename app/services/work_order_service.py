@@ -9,6 +9,7 @@ from app.models.customer import Customer, Vehicle
 from app.models.payment import Payment, PaymentDetail
 from app.services.inventory_service import InventoryService
 from app.models.inventory import Part
+from app.models.service_item import ServiceItem
 from app.models.work_order import (
     WO_STATUS_LABELS,
     WO_TRANSITIONS,
