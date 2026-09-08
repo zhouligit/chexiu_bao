@@ -1,18 +1,23 @@
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.core.response import success
 from app.database import get_db
 from app.dependencies import CurrentUser, get_current_user, require_roles
 from app.schemas.common import PageParams
-from app.schemas.service_item import ServiceItemCreate
+from app.schemas.inspection import InspectionSubmit
+from app.schemas.service_item import ServiceItemCreate, ServiceItemUpdate
 from app.schemas.work_order import (
+    AssignRequest,
     SettleRequest,
     StatusTransition,
     WorkOrderCreate,
     WorkOrderItemCreate,
     WorkOrderPartCreate,
 )
+from app.services.inspection_service import InspectionService
+from app.services.print_service import PrintService
 from app.services.work_order_service import ServiceItemService, WorkOrderService
 
 router = APIRouter(prefix="/work-orders", tags=["工单管理"])
@@ -97,15 +102,61 @@ def settle_order(
     return success(detail.model_dump())
 
 
+@router.post("/{order_id}/assign")
+def assign_technician(
+    order_id: int,
+    data: AssignRequest,
+    current_user: CurrentUser = Depends(require_roles("owner", "manager", "receptionist")),
+    db: Session = Depends(get_db),
+):
+    detail = WorkOrderService.assign_technician(db, current_user, order_id, data)
+    return success(detail.model_dump())
+
+
+@router.get("/{order_id}/inspection")
+def get_inspection(
+    order_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    record = InspectionService.get_inspection(db, current_user, order_id)
+    if record is None:
+        return success({"items": InspectionService.get_default_items()})
+    return success(record.model_dump())
+
+
+@router.post("/{order_id}/inspection")
+def submit_inspection(
+    order_id: int,
+    data: InspectionSubmit,
+    current_user: CurrentUser = Depends(require_roles("owner", "manager", "receptionist")),
+    db: Session = Depends(get_db),
+):
+    record = InspectionService.submit_inspection(db, current_user, order_id, data)
+    return success(record.model_dump())
+
+
+@router.get("/{order_id}/print", response_class=HTMLResponse)
+def print_work_order(
+    order_id: int,
+    type: str = Query("quote", alias="type"),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    html = PrintService.render_html(db, current_user, order_id, type)
+    return HTMLResponse(content=html)
+
+
 service_router = APIRouter(prefix="/service-items", tags=["服务项目"])
 
 
 @service_router.get("")
 def list_service_items(
+    all: bool = Query(False, alias="all"),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    items = ServiceItemService.list_items(db, current_user)
+    items = ServiceItemService.list_items(db, current_user, include_disabled=all)
     return success([i.model_dump() for i in items])
 
 
@@ -117,3 +168,24 @@ def create_service_item(
 ):
     item = ServiceItemService.create_item(db, current_user, data)
     return success(item.model_dump())
+
+
+@service_router.put("/{item_id}")
+def update_service_item(
+    item_id: int,
+    data: ServiceItemUpdate,
+    current_user: CurrentUser = Depends(require_roles("owner", "manager")),
+    db: Session = Depends(get_db),
+):
+    item = ServiceItemService.update_item(db, current_user, item_id, data)
+    return success(item.model_dump())
+
+
+@service_router.delete("/{item_id}")
+def delete_service_item(
+    item_id: int,
+    current_user: CurrentUser = Depends(require_roles("owner", "manager")),
+    db: Session = Depends(get_db),
+):
+    ServiceItemService.delete_item(db, current_user, item_id)
+    return success()

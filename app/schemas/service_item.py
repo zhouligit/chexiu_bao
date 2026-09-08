@@ -13,6 +13,17 @@ class ServiceItemCreate(BaseModel):
     description: str | None = None
 
 
+class ServiceItemUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    code: str | None = None
+    category_id: int | None = None
+    price: Decimal | None = Field(default=None, ge=0)
+    labor_hours: Decimal | None = None
+    unit: str | None = None
+    description: str | None = None
+    status: int | None = None
+
+
 class ServiceItemResponse(BaseModel):
     id: int
     store_id: int

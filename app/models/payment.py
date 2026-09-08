@@ -19,6 +19,7 @@ class Payment(Base, TimestampMixin):
     discount_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
     payable_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     paid_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    refunded_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
     status: Mapped[str] = mapped_column(String(20), default="paid")
     cashier_id: Mapped[int | None] = mapped_column(BigInteger)
     settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

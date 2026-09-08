@@ -95,3 +95,23 @@ def update_vehicle(
 ):
     vehicle = CustomerService.update_vehicle(db, current_user, vehicle_id, data)
     return success(vehicle.model_dump())
+
+
+@router.delete("/vehicles/{vehicle_id}")
+def delete_vehicle(
+    vehicle_id: int,
+    current_user: CurrentUser = Depends(require_roles("owner", "manager", "receptionist")),
+    db: Session = Depends(get_db),
+):
+    CustomerService.delete_vehicle(db, current_user, vehicle_id)
+    return success()
+
+
+@router.get("/{customer_id}/work-orders")
+def list_customer_work_orders(
+    customer_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    orders = CustomerService.list_customer_work_orders(db, current_user, customer_id)
+    return success([o.model_dump() for o in orders])

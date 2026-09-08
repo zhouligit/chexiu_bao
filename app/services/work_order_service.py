@@ -314,6 +314,38 @@ class WorkOrderService:
         return WorkOrderService.get_detail(db, current_user, order_id)
 
     @staticmethod
+    def assign_technician(db: Session, current_user: CurrentUser, order_id: int, data) -> object:
+        from app.models.user import User
+
+        work_order = WorkOrderService._get_order_or_404(db, current_user, order_id)
+        technician = (
+            db.query(User)
+            .filter(
+                User.id == data.technician_id,
+                User.store_id == current_user.store_id,
+                User.deleted_at.is_(None),
+                User.status == 1,
+            )
+            .first()
+        )
+        if technician is None:
+            raise NotFoundError("技师不存在")
+        if technician.role not in ("technician", "manager", "owner"):
+            raise BadRequestError("该员工不能作为施工技师")
+
+        target_ids = set(data.item_ids) if data.item_ids else None
+        updated = False
+        for item in work_order.items:
+            if target_ids is None or item.id in target_ids:
+                item.technician_id = data.technician_id
+                updated = True
+        if not updated:
+            raise BadRequestError("没有可派工的项目")
+
+        db.commit()
+        return WorkOrderService.get_detail(db, current_user, order_id)
+
+    @staticmethod
     def _get_order_or_404(db: Session, current_user: CurrentUser, order_id: int) -> WorkOrder:
         work_order = (
             db.query(WorkOrder)
@@ -381,27 +413,57 @@ class WorkOrderService:
 
 class ServiceItemService:
     @staticmethod
-    def list_items(db: Session, current_user: CurrentUser) -> list:
-        items = (
-            db.query(ServiceItem)
-            .filter(
-                ServiceItem.store_id == current_user.store_id,
-                ServiceItem.deleted_at.is_(None),
-                ServiceItem.status == 1,
-            )
-            .order_by(ServiceItem.id)
-            .all()
+    def list_items(db: Session, current_user: CurrentUser, include_disabled: bool = False) -> list:
+        query = db.query(ServiceItem).filter(
+            ServiceItem.store_id == current_user.store_id,
+            ServiceItem.deleted_at.is_(None),
         )
+        if not include_disabled:
+            query = query.filter(ServiceItem.status == 1)
+        items = query.order_by(ServiceItem.id).all()
         from app.schemas.service_item import ServiceItemResponse
 
         return [ServiceItemResponse.model_validate(i) for i in items]
 
     @staticmethod
     def create_item(db: Session, current_user: CurrentUser, data):
-        from app.schemas.service_item import ServiceItemCreate, ServiceItemResponse
+        from app.schemas.service_item import ServiceItemResponse
 
         item = ServiceItem(store_id=current_user.store_id, **data.model_dump())
         db.add(item)
         db.commit()
         db.refresh(item)
         return ServiceItemResponse.model_validate(item)
+
+    @staticmethod
+    def update_item(db: Session, current_user: CurrentUser, item_id: int, data):
+        from app.schemas.service_item import ServiceItemResponse
+
+        item = ServiceItemService._get_item_or_404(db, current_user, item_id)
+        for key, value in data.model_dump(exclude_unset=True).items():
+            setattr(item, key, value)
+        db.commit()
+        db.refresh(item)
+        return ServiceItemResponse.model_validate(item)
+
+    @staticmethod
+    def delete_item(db: Session, current_user: CurrentUser, item_id: int) -> None:
+        item = ServiceItemService._get_item_or_404(db, current_user, item_id)
+        item.deleted_at = datetime.now(timezone.utc)
+        item.status = 0
+        db.commit()
+
+    @staticmethod
+    def _get_item_or_404(db: Session, current_user: CurrentUser, item_id: int) -> ServiceItem:
+        item = (
+            db.query(ServiceItem)
+            .filter(
+                ServiceItem.id == item_id,
+                ServiceItem.store_id == current_user.store_id,
+                ServiceItem.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if item is None:
+            raise NotFoundError("服务项目不存在")
+        return item

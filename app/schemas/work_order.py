@@ -35,6 +35,11 @@ class StatusTransition(BaseModel):
     remark: str | None = None
 
 
+class AssignRequest(BaseModel):
+    technician_id: int
+    item_ids: list[int] | None = None
+
+
 class SettleRequest(BaseModel):
     discount_amount: Decimal = Field(default=Decimal("0"), ge=0)
     payments: list["PaymentMethodInput"] = Field(min_length=1)
