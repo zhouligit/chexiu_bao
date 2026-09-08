@@ -25,6 +25,13 @@ FUEL_MAP = {
 PDF_FONT = "STSong-Light"
 
 
+def _vehicle_model_text(vehicle: Vehicle | None) -> str:
+    if vehicle is None:
+        return "-"
+    text = f"{vehicle.brand or ''} {vehicle.model or ''}".strip()
+    return text or "-"
+
+
 class PrintService:
     @staticmethod
     def _build_context(db: Session, current_user: CurrentUser, order_id: int, doc_type: str) -> dict:
@@ -102,7 +109,7 @@ class PrintService:
     <div>客户：{escape(customer.name if customer else '-')}</div>
     <div>手机：{escape(customer.phone if customer else '-')}</div>
     <div>车牌：{escape(vehicle.plate_number if vehicle else '-')}</div>
-    <div>车型：{escape(f"{vehicle.brand or ''} {vehicle.model or ''}".strip() if vehicle else '-')}</div>
+    <div>车型：{escape(_vehicle_model_text(vehicle))}</div>
     <div>进店里程：{detail.mileage_in or '-'} km</div>
     <div>油量：{FUEL_MAP.get(detail.fuel_level or '', detail.fuel_level or '-')}</div>
     <div>开单时间：{detail.created_at}</div>
@@ -170,7 +177,7 @@ class PrintService:
             f"客户：{customer.name if customer else '-'}",
             f"手机：{customer.phone if customer else '-'}",
             f"车牌：{vehicle.plate_number if vehicle else '-'}",
-            f"车型：{f'{vehicle.brand or ''} {vehicle.model or ''}'.strip() if vehicle else '-'}",
+            f"车型：{_vehicle_model_text(vehicle)}",
             f"进店里程：{detail.mileage_in or '-'} km",
             f"油量：{FUEL_MAP.get(detail.fuel_level or '', detail.fuel_level or '-')}",
             f"开单时间：{detail.created_at}",
