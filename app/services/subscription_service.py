@@ -33,6 +33,7 @@ from app.schemas.subscription import (
     SubscriptionPlanResponse,
     SubscriptionStatusResponse,
 )
+from app.utils.datetime_utils import as_utc, utc_now
 from app.utils.order_no import generate_serial_no
 
 STATUS_LABELS = {
@@ -90,13 +91,14 @@ class SubscriptionService:
 
     @staticmethod
     def get_store_status(db: Session, store: Store) -> SubscriptionStatusResponse:
-        now = datetime.now(timezone.utc)
+        now = utc_now()
         SubscriptionService._sync_expired_status(db, store, now)
         plan_def = SUBSCRIPTION_PLANS.get(store.plan, SUBSCRIPTION_PLANS[DEFAULT_PLAN_CODE])
 
+        expired_at = as_utc(store.expired_at)
         days_remaining = None
-        if store.expired_at is not None:
-            days_remaining = (store.expired_at.date() - now.date()).days
+        if expired_at is not None:
+            days_remaining = (expired_at.date() - now.date()).days
 
         is_lifetime = store.subscription_status == SUB_STATUS_LIFETIME
         is_trial = store.subscription_status == SUB_STATUS_TRIAL
@@ -121,7 +123,7 @@ class SubscriptionService:
             status_label=STATUS_LABELS.get(store.subscription_status, store.subscription_status),
             plan=store.plan,
             plan_name=plan_def.name,
-            expired_at=store.expired_at,
+            expired_at=expired_at,
             days_remaining=days_remaining,
             is_active=is_active,
             is_trial=is_trial,
@@ -135,7 +137,7 @@ class SubscriptionService:
     @staticmethod
     def ensure_can_write(db: Session, store_id: int) -> None:
         store = SubscriptionService._get_store(db, store_id)
-        now = datetime.now(timezone.utc)
+        now = utc_now()
         SubscriptionService._sync_expired_status(db, store, now)
         if not SubscriptionService._can_write(store, now):
             status = SubscriptionService.get_store_status(db, store)
@@ -145,7 +147,7 @@ class SubscriptionService:
     def init_trial_store(store: Store) -> None:
         store.plan = DEFAULT_PLAN_CODE
         store.subscription_status = SUB_STATUS_TRIAL
-        store.expired_at = datetime.now(timezone.utc) + timedelta(days=TRIAL_DAYS)
+        store.expired_at = utc_now() + timedelta(days=TRIAL_DAYS)
 
     @staticmethod
     def create_order(
@@ -205,7 +207,7 @@ class SubscriptionService:
             raise BadRequestError("订单已取消")
 
         store = SubscriptionService._get_store(db, order.store_id)
-        now = datetime.now(timezone.utc)
+        now = utc_now()
         period_start, period_end = SubscriptionService._calc_period(store, order.billing_cycle, now)
 
         order.status = ORDER_PAID
@@ -252,12 +254,13 @@ class SubscriptionService:
         if billing_cycle == BILLING_LIFETIME:
             return now, None
 
+        expired_at = as_utc(store.expired_at)
         base = now
-        if store.expired_at and store.expired_at > now and store.subscription_status in (
+        if expired_at and expired_at > now and store.subscription_status in (
             SUB_STATUS_ACTIVE,
             SUB_STATUS_TRIAL,
         ):
-            base = store.expired_at
+            base = expired_at
 
         days = BILLING_CYCLES[billing_cycle]["days"]
         return base, base + timedelta(days=days)
@@ -275,7 +278,8 @@ class SubscriptionService:
     def _sync_expired_status(db: Session, store: Store, now: datetime) -> None:
         if store.subscription_status in (SUB_STATUS_LIFETIME, SUB_STATUS_EXPIRED):
             return
-        if store.expired_at is not None and store.expired_at < now:
+        expired_at = as_utc(store.expired_at)
+        if expired_at is not None and expired_at < now:
             if store.subscription_status != SUB_STATUS_EXPIRED:
                 store.subscription_status = SUB_STATUS_EXPIRED
                 db.commit()
@@ -284,17 +288,19 @@ class SubscriptionService:
     def _is_active(store: Store, now: datetime) -> bool:
         if store.subscription_status == SUB_STATUS_LIFETIME:
             return True
-        if store.expired_at is None:
+        expired_at = as_utc(store.expired_at)
+        if expired_at is None:
             return store.subscription_status in (SUB_STATUS_ACTIVE, SUB_STATUS_TRIAL)
-        return store.expired_at >= now
+        return expired_at >= now
 
     @staticmethod
     def _can_write(store: Store, now: datetime) -> bool:
         if store.subscription_status == SUB_STATUS_LIFETIME:
             return True
-        if store.expired_at is None:
+        expired_at = as_utc(store.expired_at)
+        if expired_at is None:
             return store.subscription_status in (SUB_STATUS_ACTIVE, SUB_STATUS_TRIAL)
-        grace_end = store.expired_at + timedelta(days=GRACE_DAYS)
+        grace_end = expired_at + timedelta(days=GRACE_DAYS)
         return grace_end >= now
 
     @staticmethod
