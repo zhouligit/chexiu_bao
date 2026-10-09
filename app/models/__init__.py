@@ -1,3 +1,4 @@
+from app.models.appointment import Appointment
 from app.models.customer import Customer, Vehicle
 from app.models.inventory import Inventory, InventoryLog, Part
 from app.models.payment import Payment, PaymentDetail
@@ -6,6 +7,7 @@ from app.models.store import Store
 from app.models.subscription import SubscriptionOrder
 from app.models.supplier import Supplier, WorkOrderInspection
 from app.models.user import User
+from app.models.wechat_identity import WechatIdentity
 from app.models.work_bay import WorkBay
 from app.models.work_order import WorkOrder, WorkOrderItem, WorkOrderLog, WorkOrderPart
 
@@ -14,6 +16,7 @@ __all__ = [
     "User",
     "Customer",
     "Vehicle",
+    "Appointment",
     "ServiceCategory",
     "ServiceItem",
     "Part",
@@ -22,6 +25,7 @@ __all__ = [
     "Supplier",
     "WorkOrderInspection",
     "SubscriptionOrder",
+    "WechatIdentity",
     "WorkBay",
     "WorkOrder",
     "WorkOrderItem",
@@ -30,3 +34,5 @@ __all__ = [
     "Payment",
     "PaymentDetail",
 ]
+
+

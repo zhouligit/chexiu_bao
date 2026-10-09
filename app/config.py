@@ -20,9 +20,14 @@ class Settings(BaseSettings):
     baidu_ocr_secret_key: str | None = None
     admin_api_key: str | None = None
 
+    # 微信小程序（未配置时 code2session 走本地 mock，便于联调）
+    wechat_mp_app_id: str | None = None
+    wechat_mp_app_secret: str | None = None
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
 
 
 @lru_cache

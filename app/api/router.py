@@ -1,10 +1,15 @@
 from fastapi import APIRouter, Depends
 
-from app.api.v1 import auth, customers, inventory, ocr, payments, reports, stores, subscription, suppliers, uploads, users, work_bays, work_orders
+from app.api.v1 import appointments, auth, customers, inventory, ocr, payments, reports, stores, subscription, suppliers, uploads, users, work_bays, work_orders
+from app.api.v1 import mp_auth
 from app.dependencies import require_writable_subscription
 
 api_router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_writable_subscription)])
 api_router.include_router(auth.router)
+api_router.include_router(mp_auth.router)
+api_router.include_router(appointments.router)
+
+
 api_router.include_router(stores.router)
 api_router.include_router(users.router)
 api_router.include_router(customers.router)

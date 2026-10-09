@@ -851,6 +851,54 @@ CREATE INDEX idx_payment_detail ON payment_detail(payment_id);
 
 ---
 
+## 7.1 小程序扩展表
+
+> 规划见 `mini-program-plan.md`。`wechat_identity` 已落库（Alembic `007`）；预约表待后续迁移。
+
+### wechat_identity（微信身份绑定）· 已实现
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT PK | |
+| store_id | BIGINT | 可空：平台级 openid；门店员工绑定时必填 |
+| openid | VARCHAR(64) | NOT NULL |
+| unionid | VARCHAR(64) | |
+| appid | VARCHAR(64) | 小程序 AppID |
+| user_id | BIGINT | 绑定员工（门店端） |
+| customer_id | BIGINT | 绑定客户（车主端） |
+| phone | VARCHAR(20) | |
+| client | VARCHAR(20) | `store` / `owner` |
+| created_at / updated_at | TIMESTAMP | |
+
+唯一约束：`(appid, openid)`。API：`POST /api/v1/mp/auth/login|bind`，`GET /api/v1/mp/auth/me`。
+
+### appointment（预约单）· 已实现（Alembic `008`）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT PK | |
+| store_id | BIGINT | NOT NULL |
+| customer_id / vehicle_id | BIGINT | 可空 |
+| contact_name / contact_phone / plate_number | VARCHAR | 未建档快照 |
+| scheduled_start / scheduled_end | TIMESTAMP | 预约时段 |
+| status | VARCHAR(20) | pending/confirmed/arrived/cancelled/expired/converted |
+| source | VARCHAR(20) | mp_owner/mp_store/phone |
+| work_order_id | BIGINT | 转工单后关联 |
+| deposit_amount | DECIMAL(12,2) | 预约金 |
+| pay_status | VARCHAR(20) | unpaid/paid/refunded |
+| service_item_ids | VARCHAR(500) | 意向项目 id，逗号分隔 |
+| remark | TEXT | |
+| created_by | BIGINT | 创建人（员工） |
+| created_at / updated_at / deleted_at | TIMESTAMP | |
+
+API：`GET/POST /api/v1/appointments`，`GET/PUT /{id}`，`POST /{id}/confirm|arrive|cancel|convert`。
+
+### payment 扩展（微信支付）
+
+在现有 `payment` / 明细上增加或使用扩展字段：`openid`、`wx_transaction_id`、`wx_prepay_id`、`notify_raw`（或独立 `wechat_payment` 表）。
+
+---
+
 ## 8. 迁移与种子数据
 
 ### 8.1 系统预设数据

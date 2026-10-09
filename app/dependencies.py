@@ -12,9 +12,11 @@ security = HTTPBearer(auto_error=False)
 
 SUBSCRIPTION_EXEMPT_PREFIXES = (
     "/api/v1/auth",
+    "/api/v1/mp/auth",
     "/api/v1/subscription",
     "/api/v1/admin",
 )
+
 
 
 def get_current_user(

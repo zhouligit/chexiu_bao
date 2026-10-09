@@ -50,6 +50,15 @@ API 文档：http://localhost:8000/docs
 | GET | `/api/v1/reports/revenue-trend` | 营收趋势 |
 | GET | `/api/v1/reports/service-analysis` | 项目分析 |
 
+## 文档
+
+| 文档 | 说明 |
+|------|------|
+| `docs/PRD.md` | 产品需求与分期 |
+| `docs/architecture.md` | 架构与三仓布局 |
+| `docs/database-schema.md` | 库表设计 |
+| `docs/mini-program-plan.md` | **微信小程序规划**（门店端→车主端、预约、微信支付）；**近期待办见第 7 节** |
+
 ## 生产部署
 
 ```bash

@@ -7,6 +7,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 from app.models.store import SoftDeleteMixin, TimestampMixin
 
+# SQLite 仅 INTEGER PK 支持自增；MySQL/PG 仍用 BIGINT
+_PK = BigInteger().with_variant(Integer, "sqlite")
+
+
 # 工单状态
 WO_PENDING_INSPECTION = "pending_inspection"
 WO_PENDING_QUOTE = "pending_quote"
@@ -41,9 +45,10 @@ WO_STATUS_LABELS = {
 class WorkOrder(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "work_order"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(_PK, primary_key=True, autoincrement=True)
     store_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     order_no: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+
     customer_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     vehicle_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default=WO_PENDING_INSPECTION)
@@ -104,7 +109,8 @@ class WorkOrderPart(Base, TimestampMixin):
 class WorkOrderLog(Base):
     __tablename__ = "work_order_log"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(_PK, primary_key=True, autoincrement=True)
+
     work_order_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("work_order.id"), nullable=False, index=True)
     from_status: Mapped[str | None] = mapped_column(String(20))
     to_status: Mapped[str] = mapped_column(String(20), nullable=False)

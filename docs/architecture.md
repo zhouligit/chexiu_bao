@@ -95,31 +95,40 @@
 | 仓库 | 路径 | 说明 |
 |------|------|------|
 | **chexiu_bao** | `/Users/zhouli/data/code/chuangye/chexiu_bao` | 后端 API + 产品文档 |
-| **chexiu_bao-web** | `/Users/zhouli/data/code/chuangye/chexiu_bao-web` | PC 管理端（二期含 Taro 移动端） |
+| **chexiu_bao-web** | `/Users/zhouli/data/code/chuangye/chexiu_bao-web` | PC 管理端 |
+| **chexiu_bao-mp** | `/Users/zhouli/data/code/chuangye/chexiu_bao-mp` | 微信小程序（Taro，门店端+车主端分包）**【新建】** |
 
 ```
 chuangye/
 ├── chexiu_bao/          # 后端仓库
 │   ├── app/             # FastAPI 应用
-│   ├── docs/            # PRD、库表、架构（产品文档放后端仓）
+│   ├── docs/            # PRD、库表、架构、小程序规划
 │   ├── migrations/
-│   └── .env             # 本地配置（PG / Redis 连接）
+│   └── .env
 │
-└── chexiu_bao-web/      # 前端仓库
+├── chexiu_bao-web/      # PC 管理端
+│   ├── src/
+│   └── package.json
+│
+└── chexiu_bao-mp/       # 微信小程序（新建独立仓）
     ├── src/
-    ├── .env.development   # VITE_API_BASE_URL=http://localhost:8000
+    │   ├── packageStore/   # 门店端分包（先做）
+    │   └── packageOwner/   # 车主端分包（后做）
+    ├── project.config.json
     └── package.json
 ```
+
+> 小程序为何独立仓、分期与目录细节见 **[docs/mini-program-plan.md](./mini-program-plan.md)**。
 
 **协作约定：**
 
 | 事项 | 做法 |
 |------|------|
 | API 契约 | 后端 FastAPI 自动生成 OpenAPI → `http://localhost:8000/openapi.json` |
-| 前端类型 | 前端用 `openapi-typescript` 从 OpenAPI 生成 TS 类型 |
+| 前端类型 | PC / 小程序均可从 OpenAPI 生成 TS 类型 |
 | 版本对齐 | 后端发版打 Git tag（如 `v0.1.0`），前端 README 标注兼容版本 |
-| 本地联调 | 后端 `uvicorn` 直跑 → 前端 `npm run dev`，Vite 代理或直连 API |
-| CI/CD | 各仓库独立流水线，互不影响 |
+| 本地联调 | 后端 `uvicorn`；PC `npm run dev`；小程序微信开发者工具 |
+| CI/CD | 三仓独立流水线；小程序另走微信上传/提审 |
 
 ---
 
@@ -369,28 +378,12 @@ chexiu_bao-web/                 # 前端仓库根目录
 | `/settings/store` | 门店设置 | 老板 |
 | `/settings/users` | 员工管理 | 老板/店长 |
 
-### 4.3 移动端 / 小程序（Taro）
+### 4.3 微信小程序（独立仓 `chexiu_bao-mp`）
 
-```
-mobile/
-├── src/
-│   ├── app.config.ts            # Taro 路由配置
-│   ├── pages/
-│   │   ├── index/               # 首页（技师工作台）
-│   │   ├── work-order/          # 我的工单
-│   │   ├── work-order-detail/   # 工单详情/施工
-│   │   ├── checkin/             # 接车（前台）
-│   │   └── mine/                # 个人中心
-│   │
-│   ├── components/
-│   ├── services/
-│   └── utils/
-│
-├── project.config.json          # 微信小程序配置
-└── package.json
-```
-
-**Taro 优势：** 一套 React 代码编译为 H5 + 微信小程序，二期车主端小程序可复用同一技术栈。
+- 技术：Taro 3 + React + TypeScript  
+- 策略：一个小程序 AppID；`packageStore`（门店端，优先）+ `packageOwner`（车主端，随后）  
+- 能力：预约、微信支付与 PC 共用后端 API  
+- 完整目录与分期：见 `docs/mini-program-plan.md`
 
 ---
 
