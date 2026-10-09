@@ -1,16 +1,50 @@
 # Python
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
+.Python
 .venv/
-.env
-uploads/
+venv/
+*.egg-info/
+.eggs/
+dist/
+build/
 
-# IDE
+# Env & secrets（保留 .env.example）
+.env
+.env.*
+!.env.example
+
+# Runtime / local data
+uploads/
+*.log
+*.sqlite3
+*.db
+
+# Test / lint caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.cache/
+
+# Local scratch（OCR 截图、临时脚本等，非产品代码）
+tmp_doc/
+tmp/
+temp/
+*.local.md
+
+# IDE / OS
 .idea/
 .vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
 
 # projects_manager
 **/.projects-manager
-
-# OS
-.DS_Store
