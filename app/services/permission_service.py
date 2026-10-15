@@ -12,13 +12,21 @@ class PermissionService:
 
     @staticmethod
     def get_store_role(db: Session, user: User) -> StoreRole | None:
-        if user.role_id is None:
-            return None
-        return (
-            db.query(StoreRole)
-            .filter(StoreRole.id == user.role_id, StoreRole.store_id == user.store_id)
-            .first()
-        )
+        if user.role_id is not None:
+            role = (
+                db.query(StoreRole)
+                .filter(StoreRole.id == user.role_id, StoreRole.store_id == user.store_id)
+                .first()
+            )
+            if role is not None:
+                return role
+        if user.role:
+            return (
+                db.query(StoreRole)
+                .filter(StoreRole.store_id == user.store_id, StoreRole.slug == user.role)
+                .first()
+            )
+        return None
 
     @staticmethod
     def effective_permission_codes(db: Session, user: User) -> set[str]:

@@ -3,11 +3,20 @@ from sqlalchemy.orm import Session
 
 from app.core.response import success
 from app.database import get_db
-from app.dependencies import CurrentUser, require_permission
+from app.dependencies import CurrentUser, get_current_user, require_permission
 from app.schemas.user_mgmt import UserCreate, UserUpdate
 from app.services.user_service import UserService
 
 router = APIRouter(prefix="/users", tags=["员工管理"])
+
+
+@router.get("/access")
+def user_management_access(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    access = UserService.management_access(db, current_user)
+    return success(access.model_dump())
 
 
 @router.get("")

@@ -8,10 +8,38 @@ from app.dependencies import CurrentUser
 from app.models.rbac import StoreRole
 from app.models.user import User
 from app.permissions.catalog import ROLE_LABELS
-from app.schemas.user_mgmt import ALLOWED_ROLES, UserCreate, UserListItem, UserUpdate
+from app.schemas.user_mgmt import ALLOWED_ROLES, UserCreate, UserListItem, UserManagementAccess, UserUpdate
+from app.services.permission_service import PermissionService
 
 
 class UserService:
+    @staticmethod
+    def management_access(db: Session, current_user: CurrentUser) -> UserManagementAccess:
+        user = (
+            db.query(User)
+            .filter(User.id == current_user.id, User.deleted_at.is_(None))
+            .first()
+        )
+        if user is None:
+            raise NotFoundError("用户不存在")
+        store_role = PermissionService.get_store_role(db, user)
+        from app.permissions.catalog import ROLE_LABELS
+
+        slug = store_role.slug if store_role else user.role
+        name = store_role.name if store_role else ROLE_LABELS.get(user.role, user.role)
+        perms = PermissionService.effective_permission_codes(db, user)
+        can_open = "settings:users" in perms
+        can_list = can_open or "user:read" in perms
+        return UserManagementAccess(
+            role_slug=slug,
+            role_name=name,
+            can_open_management=can_open,
+            can_list=can_list,
+            can_create="user:create" in perms,
+            can_update="user:update" in perms,
+            can_delete="user:delete" in perms,
+        )
+
     @staticmethod
     def list_users(db: Session, current_user: CurrentUser) -> list[UserListItem]:
         users = (

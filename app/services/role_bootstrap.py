@@ -80,11 +80,19 @@ class RoleBootstrap:
         roles = RoleBootstrap.ensure_store_roles(db, store_id)
         users = db.query(User).filter(User.store_id == store_id, User.deleted_at.is_(None)).all()
         for user in users:
+            role = None
             if user.role_id:
-                continue
-            role = roles.get(user.role)
-            if role:
-                user.role_id = role.id
+                role = (
+                    db.query(StoreRole)
+                    .filter(StoreRole.id == user.role_id, StoreRole.store_id == store_id)
+                    .first()
+                )
+            if role is None:
+                role = roles.get(user.role)
+                if role:
+                    user.role_id = role.id
+            if role and user.role != role.slug:
+                user.role = role.slug
 
     @staticmethod
     def bootstrap_all_stores(db: Session) -> None:

@@ -1,0 +1,18 @@
+---
+description: Production and local DB is MySQL; use MySQL syntax in SQL, ops, and docs for this repo
+alwaysApply: true
+---
+
+# 数据库：MySQL
+
+本仓库（车修宝后端）**生产与日常运维使用 MySQL**，不是 PostgreSQL。
+
+编写或给出命令时请默认 MySQL：
+
+- **连接**：`DATABASE_URL` 使用 `mysql+pymysql://...` 或 `mysql://...`（以项目 `.env` 为准）
+- **手工 SQL**：表名/保留字用反引号，例如 `` `user` ``，不要用 PostgreSQL 的双引号 `"user"`
+- **备份**：`mysqldump`，不要用 `pg_dump` / `createdb`
+- **客户端**：`mysql` CLI，示例核查在 MySQL 里逐条执行，不要多条语句粘成一行
+- **迁移**：仍用 `alembic upgrade head`；模型已对 SQLite 测试做 variant，MySQL 用 BIGINT 自增
+
+文档或架构说明里若写 PostgreSQL 命令，应同时给出 MySQL 等价写法，或注明「生产为 MySQL」。

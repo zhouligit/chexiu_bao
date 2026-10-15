@@ -39,6 +39,16 @@ class UserCreate(BaseModel):
     role_id: int | None = Field(default=None)
 
 
+class UserManagementAccess(BaseModel):
+    role_slug: str
+    role_name: str
+    can_open_management: bool
+    can_list: bool
+    can_create: bool
+    can_update: bool
+    can_delete: bool
+
+
 class UserUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=50)
     phone: str | None = Field(default=None, max_length=20)

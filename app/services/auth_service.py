@@ -27,8 +27,10 @@ class AuthService:
         permissions = sorted(PermissionService.effective_permission_codes(db, user))
         data_policy = PermissionService.get_data_policy(db, user)
         role_info = None
+        canonical_role = user.role
         if store_role:
             role_info = RoleBrief(id=store_role.id, slug=store_role.slug, name=store_role.name)
+            canonical_role = store_role.slug
         elif user.role:
             from app.permissions.catalog import ROLE_LABELS
 
@@ -39,7 +41,7 @@ class AuthService:
             username=user.username,
             name=user.name,
             phone=user.phone,
-            role=user.role,
+            role=canonical_role,
             role_info=role_info,
             permissions=permissions,
             data_policy=data_policy,
