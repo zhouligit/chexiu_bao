@@ -83,3 +83,49 @@ def test_login_failure(client):
     assert response.status_code == 200
     body = response.json()
     assert body["code"] == 401
+
+
+def test_receptionist_cannot_manage_users(client):
+    from app.services.role_bootstrap import RoleBootstrap
+
+    db = TestingSessionLocal()
+    roles = RoleBootstrap.ensure_store_roles(db, 1)
+    receptionist = User(
+        id=2,
+        store_id=1,
+        username="qiantai_test",
+        password_hash=hash_password("test123456"),
+        name="前台测试",
+        role="receptionist",
+        role_id=roles["receptionist"].id,
+    )
+    db.add(receptionist)
+    db.commit()
+    receptionist_role_id = roles["receptionist"].id
+    db.close()
+
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"username": "qiantai_test", "password": "test123456"},
+    )
+    token = login.json()["data"]["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    access = client.get("/api/v1/users/access", headers=headers)
+    assert access.json()["code"] == 0
+    data = access.json()["data"]
+    assert data["can_open_management"] is False
+    assert data["can_create"] is False
+    assert data["role_slug"] == "receptionist"
+
+    create = client.post(
+        "/api/v1/users",
+        headers=headers,
+        json={
+            "username": "new_user_x",
+            "password": "test123456",
+            "name": "新用户",
+            "role_id": receptionist_role_id,
+        },
+    )
+    assert create.json()["code"] == 403
