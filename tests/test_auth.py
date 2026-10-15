@@ -8,6 +8,7 @@ from app.core.security import hash_password
 from app.database import Base, get_db
 from app.main import app
 from app.models.store import Store
+from app.models.rbac import Permission, StoreRole  # noqa: F401
 from app.models.user import User
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -21,7 +22,12 @@ TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=Fals
 
 
 def seed_test_data(db):
+    from app.services.role_bootstrap import RoleBootstrap
+
     store = Store(id=1, name="演示汽修店", code="demo", phone="400-000-0000", address="演示地址")
+    db.add(store)
+    db.flush()
+    roles = RoleBootstrap.ensure_store_roles(db, 1)
     user = User(
         id=1,
         store_id=1,
@@ -29,8 +35,9 @@ def seed_test_data(db):
         password_hash=hash_password("admin123"),
         name="管理员",
         role="owner",
+        role_id=roles["owner"].id,
     )
-    db.add_all([store, user])
+    db.add(user)
     db.commit()
 
 

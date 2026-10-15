@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.core.response import success
 from app.database import get_db
-from app.dependencies import CurrentUser, get_current_user, require_roles
+from app.dependencies import CurrentUser, get_current_user, require_permission
 from app.schemas.subscription import ActivateOrderRequest, CreateSubscriptionOrderRequest
 from app.services.subscription_service import SubscriptionService
 
@@ -41,7 +41,7 @@ def list_orders(
 @router.post("/orders")
 def create_order(
     data: CreateSubscriptionOrderRequest,
-    current_user: CurrentUser = Depends(require_roles("owner", "manager")),
+    current_user: CurrentUser = Depends(require_permission("subscription:manage")),
     db: Session = Depends(get_db),
 ):
     order = SubscriptionService.create_order(db, current_user, data)
@@ -51,7 +51,7 @@ def create_order(
 @router.post("/orders/{order_id}/cancel")
 def cancel_order(
     order_id: int,
-    current_user: CurrentUser = Depends(require_roles("owner", "manager")),
+    current_user: CurrentUser = Depends(require_permission("subscription:manage")),
     db: Session = Depends(get_db),
 ):
     order = SubscriptionService.cancel_order(db, current_user, order_id)
@@ -62,7 +62,7 @@ def cancel_order(
 def activate_order_owner(
     order_id: int,
     data: ActivateOrderRequest,
-    current_user: CurrentUser = Depends(require_roles("owner")),
+    current_user: CurrentUser = Depends(require_permission("subscription:activate")),
     db: Session = Depends(get_db),
 ):
     """门店老板确认支付（线下转账后自用，生产环境建议走平台管理员接口或微信支付回调）"""

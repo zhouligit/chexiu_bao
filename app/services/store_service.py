@@ -55,6 +55,11 @@ class StoreService:
         db.add(store)
         db.flush()
 
+        from app.services.role_bootstrap import RoleBootstrap
+
+        roles_by_slug = RoleBootstrap.ensure_store_roles(db, store.id)
+        owner_role = roles_by_slug["owner"]
+
         user = User(
             store_id=store.id,
             username=data.username,
@@ -62,6 +67,7 @@ class StoreService:
             name=data.name,
             phone=data.phone,
             role="owner",
+            role_id=owner_role.id,
         )
         db.add(user)
         db.flush()

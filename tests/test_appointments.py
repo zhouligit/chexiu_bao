@@ -12,6 +12,7 @@ from app.main import app
 from app.models.appointment import Appointment  # noqa: F401
 from app.models.customer import Customer, Vehicle
 from app.models.store import Store
+from app.models.rbac import Permission, StoreRole  # noqa: F401
 from app.models.user import User
 from app.models.work_order import WorkOrder  # noqa: F401
 
@@ -24,7 +25,12 @@ TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=Fals
 
 
 def seed(db):
+    from app.services.role_bootstrap import RoleBootstrap
+
     store = Store(id=1, name="演示汽修店", code="demo")
+    db.add(store)
+    db.flush()
+    roles = RoleBootstrap.ensure_store_roles(db, 1)
     user = User(
         id=1,
         store_id=1,
@@ -32,10 +38,11 @@ def seed(db):
         password_hash=hash_password("admin123"),
         name="管理员",
         role="owner",
+        role_id=roles["owner"].id,
     )
     customer = Customer(id=1, store_id=1, name="张三", phone="13800001111")
     vehicle = Vehicle(id=1, store_id=1, customer_id=1, plate_number="粤B12345")
-    db.add_all([store, user, customer, vehicle])
+    db.add_all([user, customer, vehicle])
     db.commit()
 
 

@@ -21,6 +21,8 @@ class UserListItem(BaseModel):
     name: str
     phone: str | None = None
     role: str
+    role_id: int | None = None
+    role_name: str | None = None
     status: int
     last_login_at: datetime | None = None
     created_at: datetime
@@ -33,12 +35,14 @@ class UserCreate(BaseModel):
     password: str = Field(min_length=6, max_length=100)
     name: str = Field(min_length=1, max_length=50)
     phone: str | None = Field(default=None, max_length=20)
-    role: str = Field(default="receptionist")
+    role: str | None = Field(default=None)
+    role_id: int | None = Field(default=None)
 
 
 class UserUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=50)
     phone: str | None = Field(default=None, max_length=20)
     role: str | None = None
+    role_id: int | None = None
     status: int | None = None
     password: str | None = Field(default=None, min_length=6, max_length=100)

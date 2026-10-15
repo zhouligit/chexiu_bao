@@ -7,6 +7,7 @@ from app.core.exceptions import ForbiddenError, UnauthorizedError
 from app.core.security import decode_token
 from app.database import get_db
 from app.models.user import User
+from app.services.permission_service import PermissionService
 
 security = HTTPBearer(auto_error=False)
 
@@ -45,8 +46,28 @@ def get_current_user(
 
 
 def require_roles(*roles: str):
+    """Deprecated: prefer require_permission. Kept for legacy callers during migration."""
+
     def checker(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
         if current_user.role not in roles and current_user.role != "owner":
+            raise ForbiddenError()
+        return current_user
+
+    return checker
+
+
+def require_permission(*permission_codes: str):
+    def checker(
+        current_user: CurrentUser = Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ) -> CurrentUser:
+        if current_user.role == "owner":
+            return current_user
+        user = db.query(User).filter(User.id == current_user.id, User.deleted_at.is_(None)).first()
+        if user is None:
+            raise UnauthorizedError()
+        effective = PermissionService.effective_permission_codes(db, user)
+        if not any(code in effective for code in permission_codes):
             raise ForbiddenError()
         return current_user
 

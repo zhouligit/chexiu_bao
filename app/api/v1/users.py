@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.response import success
 from app.database import get_db
-from app.dependencies import CurrentUser, get_current_user, require_roles
+from app.dependencies import CurrentUser, require_permission
 from app.schemas.user_mgmt import UserCreate, UserUpdate
 from app.services.user_service import UserService
 
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/users", tags=["员工管理"])
 
 @router.get("")
 def list_users(
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_permission("user:read")),
     db: Session = Depends(get_db),
 ):
     users = UserService.list_users(db, current_user)
@@ -22,7 +22,7 @@ def list_users(
 @router.post("")
 def create_user(
     data: UserCreate,
-    current_user: CurrentUser = Depends(require_roles("owner", "manager")),
+    current_user: CurrentUser = Depends(require_permission("user:create")),
     db: Session = Depends(get_db),
 ):
     user = UserService.create_user(db, current_user, data)
@@ -33,7 +33,7 @@ def create_user(
 def update_user(
     user_id: int,
     data: UserUpdate,
-    current_user: CurrentUser = Depends(require_roles("owner", "manager")),
+    current_user: CurrentUser = Depends(require_permission("user:update")),
     db: Session = Depends(get_db),
 ):
     user = UserService.update_user(db, current_user, user_id, data)
@@ -43,7 +43,7 @@ def update_user(
 @router.delete("/{user_id}")
 def delete_user(
     user_id: int,
-    current_user: CurrentUser = Depends(require_roles("owner")),
+    current_user: CurrentUser = Depends(require_permission("user:delete")),
     db: Session = Depends(get_db),
 ):
     UserService.delete_user(db, current_user, user_id)

@@ -32,6 +32,12 @@ class SubscriptionBrief(BaseModel):
     message: str | None = None
 
 
+class RoleBrief(BaseModel):
+    id: int | None = None
+    slug: str
+    name: str
+
+
 class UserInfo(BaseModel):
     id: int
     store_id: int
@@ -39,6 +45,9 @@ class UserInfo(BaseModel):
     name: str
     phone: str | None = None
     role: str
+    role_info: RoleBrief | None = None
+    permissions: list[str] = []
+    data_policy: dict = {}
     avatar_url: str | None = None
     store: StoreBrief | None = None
     subscription: SubscriptionBrief | None = None

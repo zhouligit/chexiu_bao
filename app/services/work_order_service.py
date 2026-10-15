@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
@@ -46,13 +47,27 @@ class WorkOrderService:
 
     @staticmethod
     def list_orders(db: Session, current_user: CurrentUser, params: PageParams) -> PageResult:
+        from app.services.data_scope import DataScope
+
         query = db.query(WorkOrder).filter(
             WorkOrder.store_id == current_user.store_id,
             WorkOrder.deleted_at.is_(None),
         )
+        query = DataScope.apply_work_order_query(db, query, current_user)
         if params.keyword:
-            keyword = f"%{params.keyword}%"
-            query = query.filter(WorkOrder.order_no.ilike(keyword))
+            keyword = f"%{params.keyword.strip()}%"
+            plate_ids = [
+                vid
+                for (vid,) in db.query(Vehicle.id).filter(
+                    Vehicle.store_id == current_user.store_id,
+                    Vehicle.plate_number.ilike(keyword),
+                    Vehicle.deleted_at.is_(None),
+                ).all()
+            ]
+            kw_filters = [WorkOrder.order_no.ilike(keyword)]
+            if plate_ids:
+                kw_filters.append(WorkOrder.vehicle_id.in_(plate_ids))
+            query = query.filter(or_(*kw_filters))
 
         if params.status:
             query = query.filter(WorkOrder.status == params.status)
@@ -439,6 +454,7 @@ class WorkOrderService:
 
     @staticmethod
     def _get_order_or_404(db: Session, current_user: CurrentUser, order_id: int) -> WorkOrder:
+        from app.services.data_scope import DataScope
         work_order = (
             db.query(WorkOrder)
             .options(
@@ -454,6 +470,8 @@ class WorkOrderService:
             .first()
         )
         if not work_order:
+            raise NotFoundError("工单不存在")
+        if not DataScope.can_access_work_order(db, current_user, work_order):
             raise NotFoundError("工单不存在")
         return work_order
 

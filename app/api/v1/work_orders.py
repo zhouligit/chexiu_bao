@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.response import success
 from app.database import get_db
-from app.dependencies import CurrentUser, get_current_user, require_roles
+from app.dependencies import CurrentUser, require_permission
 from app.schemas.common import PageParams
 from app.schemas.inspection import InspectionSubmit
 from app.schemas.service_item import ServiceItemCreate, ServiceItemUpdate
@@ -30,7 +30,7 @@ def list_work_orders(
     page_size: int = Query(20, ge=1, le=100),
     keyword: str | None = None,
     status: str | None = None,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_permission("work_order:read")),
     db: Session = Depends(get_db),
 ):
     result = WorkOrderService.list_orders(
@@ -42,7 +42,7 @@ def list_work_orders(
 @router.post("")
 def create_work_order(
     data: WorkOrderCreate,
-    current_user: CurrentUser = Depends(require_roles("owner", "manager", "receptionist")),
+    current_user: CurrentUser = Depends(require_permission("work_order:create")),
     db: Session = Depends(get_db),
 ):
     detail = WorkOrderService.create_order(db, current_user, data)
@@ -52,7 +52,7 @@ def create_work_order(
 @router.get("/{order_id}")
 def get_work_order(
     order_id: int,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_permission("work_order:read")),
     db: Session = Depends(get_db),
 ):
     detail = WorkOrderService.get_detail(db, current_user, order_id)
@@ -63,7 +63,7 @@ def get_work_order(
 def transition_status(
     order_id: int,
     data: StatusTransition,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_permission("work_order:update")),
     db: Session = Depends(get_db),
 ):
     detail = WorkOrderService.transition(db, current_user, order_id, data.to_status, data.remark)
@@ -74,7 +74,7 @@ def transition_status(
 def add_item(
     order_id: int,
     data: WorkOrderItemCreate,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_permission("work_order:update")),
     db: Session = Depends(get_db),
 ):
     detail = WorkOrderService.add_item(db, current_user, order_id, data)
@@ -85,7 +85,7 @@ def add_item(
 def confirm_addon_item(
     order_id: int,
     item_id: int,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_permission("work_order:update")),
     db: Session = Depends(get_db),
 ):
     detail = WorkOrderService.confirm_addon_item(db, current_user, order_id, item_id)
@@ -97,7 +97,7 @@ def update_item_status(
     order_id: int,
     item_id: int,
     data: WorkOrderItemStatusUpdate,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_permission("work_order:update")),
     db: Session = Depends(get_db),
 ):
     detail = WorkOrderService.update_item_status(db, current_user, order_id, item_id, data.status)
@@ -108,7 +108,7 @@ def update_item_status(
 def add_part(
     order_id: int,
     data: WorkOrderPartCreate,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_permission("work_order:update")),
     db: Session = Depends(get_db),
 ):
     detail = WorkOrderService.add_part(db, current_user, order_id, data)
@@ -119,7 +119,7 @@ def add_part(
 def settle_order(
     order_id: int,
     data: SettleRequest,
-    current_user: CurrentUser = Depends(require_roles("owner", "manager", "receptionist", "finance")),
+    current_user: CurrentUser = Depends(require_permission("work_order:settle")),
     db: Session = Depends(get_db),
 ):
     detail = WorkOrderService.settle(db, current_user, order_id, data)
@@ -130,7 +130,7 @@ def settle_order(
 def assign_technician(
     order_id: int,
     data: AssignRequest,
-    current_user: CurrentUser = Depends(require_roles("owner", "manager", "receptionist")),
+    current_user: CurrentUser = Depends(require_permission("work_order:assign")),
     db: Session = Depends(get_db),
 ):
     detail = WorkOrderService.assign_technician(db, current_user, order_id, data)
@@ -141,7 +141,7 @@ def assign_technician(
 def get_inspection(
     order_id: int,
     type: str = Query("pre_check", alias="type"),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_permission("work_order:read")),
     db: Session = Depends(get_db),
 ):
     record = InspectionService.get_inspection(db, current_user, order_id, type)
@@ -156,7 +156,7 @@ def get_inspection(
 def submit_inspection(
     order_id: int,
     data: InspectionSubmit,
-    current_user: CurrentUser = Depends(require_roles("owner", "manager", "receptionist")),
+    current_user: CurrentUser = Depends(require_permission("work_order:inspection")),
     db: Session = Depends(get_db),
 ):
     record = InspectionService.submit_inspection(db, current_user, order_id, data)
@@ -167,7 +167,7 @@ def submit_inspection(
 def print_work_order(
     order_id: int,
     type: str = Query("quote", alias="type"),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_permission("work_order:print")),
     db: Session = Depends(get_db),
 ):
     html = PrintService.render_html(db, current_user, order_id, type)
@@ -178,7 +178,7 @@ def print_work_order(
 def print_work_order_pdf(
     order_id: int,
     type: str = Query("quote", alias="type"),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_permission("work_order:print")),
     db: Session = Depends(get_db),
 ):
     detail = WorkOrderService.get_detail(db, current_user, order_id)
@@ -202,7 +202,7 @@ service_router = APIRouter(prefix="/service-items", tags=["服务项目"])
 @service_router.get("")
 def list_service_items(
     all: bool = Query(False, alias="all"),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_permission("service_item:read")),
     db: Session = Depends(get_db),
 ):
     items = ServiceItemService.list_items(db, current_user, include_disabled=all)
@@ -212,7 +212,7 @@ def list_service_items(
 @service_router.post("")
 def create_service_item(
     data: ServiceItemCreate,
-    current_user: CurrentUser = Depends(require_roles("owner", "manager")),
+    current_user: CurrentUser = Depends(require_permission("service_item:manage")),
     db: Session = Depends(get_db),
 ):
     item = ServiceItemService.create_item(db, current_user, data)
@@ -223,7 +223,7 @@ def create_service_item(
 def update_service_item(
     item_id: int,
     data: ServiceItemUpdate,
-    current_user: CurrentUser = Depends(require_roles("owner", "manager")),
+    current_user: CurrentUser = Depends(require_permission("service_item:manage")),
     db: Session = Depends(get_db),
 ):
     item = ServiceItemService.update_item(db, current_user, item_id, data)
@@ -233,7 +233,7 @@ def update_service_item(
 @service_router.delete("/{item_id}")
 def delete_service_item(
     item_id: int,
-    current_user: CurrentUser = Depends(require_roles("owner", "manager")),
+    current_user: CurrentUser = Depends(require_permission("service_item:manage")),
     db: Session = Depends(get_db),
 ):
     ServiceItemService.delete_item(db, current_user, item_id)

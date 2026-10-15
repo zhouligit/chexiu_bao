@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.response import success
 from app.database import get_db
-from app.dependencies import CurrentUser, get_current_user, require_roles
+from app.dependencies import CurrentUser, require_permission
 from app.schemas.appointment import (
     AppointmentCancelRequest,
     AppointmentConvertRequest,
@@ -26,7 +26,7 @@ def list_appointments(
     status: str | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_permission("appointment:read")),
     db: Session = Depends(get_db),
 ):
     result = AppointmentService.list_appointments(
@@ -42,7 +42,7 @@ def list_appointments(
 @router.post("")
 def create_appointment(
     data: AppointmentCreate,
-    current_user: CurrentUser = Depends(require_roles("owner", "manager", "receptionist")),
+    current_user: CurrentUser = Depends(require_permission("appointment:write")),
     db: Session = Depends(get_db),
 ):
     item = AppointmentService.create(db, current_user, data)
@@ -52,7 +52,7 @@ def create_appointment(
 @router.get("/{appt_id}")
 def get_appointment(
     appt_id: int,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_permission("appointment:read")),
     db: Session = Depends(get_db),
 ):
     item = AppointmentService.get_detail(db, current_user, appt_id)
@@ -63,7 +63,7 @@ def get_appointment(
 def update_appointment(
     appt_id: int,
     data: AppointmentUpdate,
-    current_user: CurrentUser = Depends(require_roles("owner", "manager", "receptionist")),
+    current_user: CurrentUser = Depends(require_permission("appointment:write")),
     db: Session = Depends(get_db),
 ):
     item = AppointmentService.update(db, current_user, appt_id, data)
@@ -73,7 +73,7 @@ def update_appointment(
 @router.post("/{appt_id}/confirm")
 def confirm_appointment(
     appt_id: int,
-    current_user: CurrentUser = Depends(require_roles("owner", "manager", "receptionist")),
+    current_user: CurrentUser = Depends(require_permission("appointment:confirm")),
     db: Session = Depends(get_db),
 ):
     item = AppointmentService.confirm(db, current_user, appt_id)
@@ -83,7 +83,7 @@ def confirm_appointment(
 @router.post("/{appt_id}/arrive")
 def arrive_appointment(
     appt_id: int,
-    current_user: CurrentUser = Depends(require_roles("owner", "manager", "receptionist", "technician")),
+    current_user: CurrentUser = Depends(require_permission("appointment:arrive")),
     db: Session = Depends(get_db),
 ):
     item = AppointmentService.arrive(db, current_user, appt_id)
@@ -94,7 +94,7 @@ def arrive_appointment(
 def cancel_appointment(
     appt_id: int,
     data: AppointmentCancelRequest | None = None,
-    current_user: CurrentUser = Depends(require_roles("owner", "manager", "receptionist")),
+    current_user: CurrentUser = Depends(require_permission("appointment:cancel")),
     db: Session = Depends(get_db),
 ):
     item = AppointmentService.cancel(db, current_user, appt_id, data)
@@ -105,7 +105,7 @@ def cancel_appointment(
 def convert_appointment(
     appt_id: int,
     data: AppointmentConvertRequest | None = None,
-    current_user: CurrentUser = Depends(require_roles("owner", "manager", "receptionist")),
+    current_user: CurrentUser = Depends(require_permission("appointment:convert")),
     db: Session = Depends(get_db),
 ):
     item = AppointmentService.convert(db, current_user, appt_id, data)

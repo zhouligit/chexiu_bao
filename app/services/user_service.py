@@ -5,7 +5,9 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.core.security import hash_password
 from app.dependencies import CurrentUser
+from app.models.rbac import StoreRole
 from app.models.user import User
+from app.permissions.catalog import ROLE_LABELS
 from app.schemas.user_mgmt import ALLOWED_ROLES, UserCreate, UserListItem, UserUpdate
 
 
@@ -18,13 +20,29 @@ class UserService:
             .order_by(User.id)
             .all()
         )
-        return [UserListItem.model_validate(u) for u in users]
+        role_ids = {u.role_id for u in users if u.role_id}
+        roles = {}
+        if role_ids:
+            roles = {
+                r.id: r
+                for r in db.query(StoreRole).filter(StoreRole.id.in_(role_ids)).all()
+            }
+        result: list[UserListItem] = []
+        for u in users:
+            item = UserListItem.model_validate(u)
+            if u.role_id and u.role_id in roles:
+                item.role_name = roles[u.role_id].name
+            elif u.role:
+                item.role_name = ROLE_LABELS.get(u.role, u.role)
+            result.append(item)
+        return result
 
     @staticmethod
     def create_user(db: Session, current_user: CurrentUser, data: UserCreate) -> UserListItem:
-        if data.role not in ALLOWED_ROLES:
-            raise BadRequestError("无效的角色")
-        if data.role == "owner":
+        role, role_id = UserService._resolve_role(
+            db, current_user.store_id, data.role_id, data.role or "receptionist"
+        )
+        if role == "owner":
             raise BadRequestError("不能创建老板角色")
 
         exists = (
@@ -53,7 +71,8 @@ class UserService:
             password_hash=hash_password(data.password),
             name=data.name,
             phone=data.phone,
-            role=data.role,
+            role=role,
+            role_id=role_id,
         )
         db.add(user)
         db.commit()
@@ -71,15 +90,25 @@ class UserService:
         if user.role == "owner" and current_user.id != user.id:
             if data.role and data.role != "owner":
                 raise ForbiddenError("不能修改老板角色")
+            if data.role_id is not None:
+                raise ForbiddenError("不能修改老板角色")
             if data.status == 0:
                 raise ForbiddenError("不能禁用老板账号")
 
         update_data = data.model_dump(exclude_unset=True)
-        if "role" in update_data:
-            if update_data["role"] not in ALLOWED_ROLES:
-                raise BadRequestError("无效的角色")
-            if update_data["role"] == "owner" and user.role != "owner":
+        if "role_id" in update_data or "role" in update_data:
+            role, role_id = UserService._resolve_role(
+                db,
+                current_user.store_id,
+                update_data.get("role_id"),
+                update_data.get("role"),
+            )
+            if role == "owner" and user.role != "owner":
                 raise BadRequestError("不能将员工提升为老板")
+            user.role = role
+            user.role_id = role_id
+            update_data.pop("role", None)
+            update_data.pop("role_id", None)
 
         password = update_data.pop("password", None)
         if password:
@@ -102,6 +131,35 @@ class UserService:
         user.deleted_at = datetime.now(timezone.utc)
         user.status = 0
         db.commit()
+
+    @staticmethod
+    def _resolve_role(
+        db: Session, store_id: int, role_id: int | None, role_slug: str | None
+    ) -> tuple[str, int]:
+        if role_id is not None:
+            store_role = (
+                db.query(StoreRole)
+                .filter(StoreRole.id == role_id, StoreRole.store_id == store_id)
+                .first()
+            )
+            if store_role is None:
+                raise BadRequestError("无效的角色")
+            if store_role.slug == "owner":
+                raise BadRequestError("不能分配老板角色")
+            return store_role.slug, store_role.id
+        slug = role_slug or "receptionist"
+        if slug not in ALLOWED_ROLES:
+            raise BadRequestError("无效的角色")
+        if slug == "owner":
+            raise BadRequestError("不能分配老板角色")
+        store_role = (
+            db.query(StoreRole)
+            .filter(StoreRole.store_id == store_id, StoreRole.slug == slug)
+            .first()
+        )
+        if store_role is None:
+            raise BadRequestError("门店角色未初始化，请联系管理员")
+        return store_role.slug, store_role.id
 
     @staticmethod
     def _get_user_or_404(db: Session, current_user: CurrentUser, user_id: int) -> User:

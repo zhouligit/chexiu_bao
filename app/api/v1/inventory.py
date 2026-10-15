@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.response import success
 from app.database import get_db
-from app.dependencies import CurrentUser, get_current_user, require_roles
+from app.dependencies import CurrentUser, require_permission
 from app.schemas.inventory import InventoryLogResponse, PartCreate, PartUpdate, StockInRequest, StockOutRequest
 from app.services.inventory_service import InventoryService
 
@@ -13,7 +13,7 @@ router = APIRouter(tags=["库存管理"])
 @router.get("/parts")
 def list_parts(
     keyword: str | None = None,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_permission("inventory:read")),
     db: Session = Depends(get_db),
 ):
     parts = InventoryService.list_parts(db, current_user, keyword)
@@ -23,7 +23,7 @@ def list_parts(
 @router.post("/parts")
 def create_part(
     data: PartCreate,
-    current_user: CurrentUser = Depends(require_roles("owner", "manager", "warehouse")),
+    current_user: CurrentUser = Depends(require_permission("inventory:part_manage")),
     db: Session = Depends(get_db),
 ):
     part = InventoryService.create_part(db, current_user, data)
@@ -34,7 +34,7 @@ def create_part(
 def update_part(
     part_id: int,
     data: PartUpdate,
-    current_user: CurrentUser = Depends(require_roles("owner", "manager", "warehouse")),
+    current_user: CurrentUser = Depends(require_permission("inventory:part_manage")),
     db: Session = Depends(get_db),
 ):
     part = InventoryService.update_part(db, current_user, part_id, data)
@@ -43,7 +43,7 @@ def update_part(
 
 @router.get("/inventory/alerts")
 def inventory_alerts(
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_permission("inventory:read")),
     db: Session = Depends(get_db),
 ):
     alerts = InventoryService.list_alerts(db, current_user)
@@ -53,7 +53,7 @@ def inventory_alerts(
 @router.post("/inventory/in")
 def stock_in(
     data: StockInRequest,
-    current_user: CurrentUser = Depends(require_roles("owner", "manager", "warehouse")),
+    current_user: CurrentUser = Depends(require_permission("inventory:stock_in")),
     db: Session = Depends(get_db),
 ):
     part = InventoryService.stock_in(db, current_user, data)
@@ -63,7 +63,7 @@ def stock_in(
 @router.post("/inventory/out")
 def stock_out(
     data: StockOutRequest,
-    current_user: CurrentUser = Depends(require_roles("owner", "manager", "warehouse")),
+    current_user: CurrentUser = Depends(require_permission("inventory:stock_out")),
     db: Session = Depends(get_db),
 ):
     part = InventoryService.stock_out(db, current_user, data)
@@ -74,7 +74,7 @@ def stock_out(
 def inventory_logs(
     part_id: int | None = None,
     limit: int = 100,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_permission("inventory:read")),
     db: Session = Depends(get_db),
 ):
     logs = InventoryService.list_logs(db, current_user, part_id, limit)

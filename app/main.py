@@ -24,6 +24,10 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         SeedService.ensure_demo_data(db)
+        from app.services.role_bootstrap import RoleBootstrap
+
+        RoleBootstrap.bootstrap_all_stores(db)
+        db.commit()
     except Exception:
         pass
     finally:

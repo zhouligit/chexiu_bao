@@ -18,6 +18,7 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     name: Mapped[str] = mapped_column(String(50), nullable=False)
     phone: Mapped[str | None] = mapped_column(String(20))
     role: Mapped[str] = mapped_column(String(20), nullable=False)
+    role_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("store_role.id"), index=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500))
     status: Mapped[int] = mapped_column(SmallInteger, default=1)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

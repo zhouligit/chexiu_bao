@@ -11,7 +11,8 @@ from app.core.security import (
 )
 from app.models.store import Store
 from app.models.user import User
-from app.schemas.auth import LoginRequest, TokenResponse, UserInfo
+from app.schemas.auth import LoginRequest, RoleBrief, TokenResponse, UserInfo
+from app.services.permission_service import PermissionService
 
 
 class AuthService:
@@ -22,6 +23,16 @@ class AuthService:
 
         store = db.query(Store).filter(Store.id == user.store_id).first()
         sub = SubscriptionService.get_store_status(db, store) if store else None
+        store_role = PermissionService.get_store_role(db, user)
+        permissions = sorted(PermissionService.effective_permission_codes(db, user))
+        data_policy = PermissionService.get_data_policy(db, user)
+        role_info = None
+        if store_role:
+            role_info = RoleBrief(id=store_role.id, slug=store_role.slug, name=store_role.name)
+        elif user.role:
+            from app.permissions.catalog import ROLE_LABELS
+
+            role_info = RoleBrief(slug=user.role, name=ROLE_LABELS.get(user.role, user.role))
         return UserInfo(
             id=user.id,
             store_id=user.store_id,
@@ -29,6 +40,9 @@ class AuthService:
             name=user.name,
             phone=user.phone,
             role=user.role,
+            role_info=role_info,
+            permissions=permissions,
+            data_policy=data_policy,
             avatar_url=user.avatar_url,
             store=StoreBrief.model_validate(store) if store else None,
             subscription=SubscriptionBrief(
@@ -116,6 +130,10 @@ class SeedService:
 
             SubscriptionService.init_trial_store(store)
 
+        from app.services.role_bootstrap import RoleBootstrap
+
+        roles_by_slug = RoleBootstrap.ensure_store_roles(db, store.id)
+
         user = (
             db.query(User)
             .filter(User.store_id == store.id, User.username == "admin")
@@ -128,9 +146,12 @@ class SeedService:
                 password_hash=hash_password("admin123"),
                 name="管理员",
                 role="owner",
+                role_id=roles_by_slug["owner"].id,
             )
             db.add(user)
             db.flush()
+        elif user.role_id is None:
+            user.role_id = roles_by_slug.get(user.role, roles_by_slug["owner"]).id
 
         from decimal import Decimal
 
