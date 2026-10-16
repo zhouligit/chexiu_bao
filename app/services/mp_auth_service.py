@@ -4,25 +4,18 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import BadRequestError, UnauthorizedError
 from app.core.security import create_access_token, decode_token, verify_password
-from app.models.store import Store
 from app.models.user import User
 from app.models.wechat_identity import WechatIdentity
-from app.schemas.mp_auth import MpBindRequest, MpLoginRequest, MpLoginResponse, MpUserBrief
+from app.schemas.auth import UserInfo
+from app.schemas.mp_auth import MpBindRequest, MpLoginRequest, MpLoginResponse
+from app.services.auth_service import AuthService
 from app.services.wechat_mp_service import WechatMpService
 
 
 class MpAuthService:
     @staticmethod
-    def _user_brief(db: Session, user: User) -> MpUserBrief:
-        store = db.query(Store).filter(Store.id == user.store_id).first()
-        return MpUserBrief(
-            id=user.id,
-            username=user.username,
-            display_name=user.name,
-            role=user.role,
-            store_id=user.store_id,
-            store_name=store.name if store else None,
-        )
+    def _user_info(db: Session, user: User) -> UserInfo:
+        return AuthService.build_user_info(db, user)
 
     @staticmethod
     def _access_token(user: User) -> str:
@@ -96,7 +89,7 @@ class MpAuthService:
                 return MpLoginResponse(
                     token=MpAuthService._access_token(user),
                     bound=True,
-                    user=MpAuthService._user_brief(db, user),
+                    user=MpAuthService._user_info(db, user),
                     openid=openid,
                 )
 
@@ -163,7 +156,7 @@ class MpAuthService:
         return MpLoginResponse(
             token=MpAuthService._access_token(user),
             bound=True,
-            user=MpAuthService._user_brief(db, user),
+            user=MpAuthService._user_info(db, user),
             openid=openid,
         )
 
@@ -183,8 +176,8 @@ class MpAuthService:
 
 
     @staticmethod
-    def me(db: Session, user_id: int) -> MpUserBrief:
+    def me(db: Session, user_id: int) -> UserInfo:
         user = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
         if user is None:
             raise UnauthorizedError("用户不存在或已禁用")
-        return MpAuthService._user_brief(db, user)
+        return MpAuthService._user_info(db, user)

@@ -89,9 +89,50 @@ def test_mp_login_unbound_then_bind(client):
     me = client.get("/api/v1/mp/auth/me", headers={"Authorization": f"Bearer {access}"})
     assert me.status_code == 200
     assert me.json()["data"]["username"] == "admin"
-    assert me.json()["data"]["display_name"] == "管理员"
+    assert me.json()["data"]["name"] == "管理员"
+    assert "permissions" in me.json()["data"]
+    assert isinstance(me.json()["data"]["permissions"], list)
+    assert len(me.json()["data"]["permissions"]) > 0
 
     # 再次登录应直接 bound
     login2 = client.post("/api/v1/mp/auth/login", json={"code": "test-code-001", "client": "store"})
     assert login2.json()["data"]["bound"] is True
     assert login2.json()["data"]["user"]["username"] == "admin"
+    assert "permissions" in login2.json()["data"]["user"]
+
+
+def test_mp_me_receptionist_permissions(client):
+    from app.core.security import hash_password
+
+    db = TestingSessionLocal()
+    roles = {r.slug: r for r in db.query(StoreRole).filter(StoreRole.store_id == 1).all()}
+    rec = User(
+        id=2,
+        store_id=1,
+        username="rec_mp",
+        password_hash=hash_password("test123456"),
+        name="前台小程序",
+        role="receptionist",
+        role_id=roles["receptionist"].id,
+    )
+    db.add(rec)
+    db.commit()
+    db.close()
+
+    login = client.post("/api/v1/mp/auth/login", json={"code": "rec-code-001", "client": "store"})
+    bind_token = login.json()["data"]["token"]
+    bind = client.post(
+        "/api/v1/mp/auth/bind",
+        json={"username": "rec_mp", "password": "test123456", "client": "store"},
+        headers={"Authorization": f"Bearer {bind_token}"},
+    )
+    assert bind.status_code == 200
+    access = bind.json()["data"]["token"]
+    me = client.get("/api/v1/mp/auth/me", headers={"Authorization": f"Bearer {access}"})
+    assert me.status_code == 200
+    data = me.json()["data"]
+    assert data["role"] == "receptionist"
+    perms = set(data["permissions"])
+    assert "work_order:create" in perms
+    assert "settings:users" not in perms
+    assert "user:create" not in perms

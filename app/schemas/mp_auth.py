@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
 
+from app.schemas.auth import UserInfo
+
 
 class MpLoginRequest(BaseModel):
     code: str = Field(min_length=1, max_length=128)
@@ -12,17 +14,8 @@ class MpBindRequest(BaseModel):
     client: str = Field(default="store", pattern="^(store|owner)$")
 
 
-class MpUserBrief(BaseModel):
-    id: int
-    username: str
-    display_name: str | None = None
-    role: str | None = None
-    store_id: int | None = None
-    store_name: str | None = None
-
-
 class MpLoginResponse(BaseModel):
     token: str
     bound: bool
-    user: MpUserBrief | None = None
+    user: UserInfo | None = None
     openid: str | None = None
