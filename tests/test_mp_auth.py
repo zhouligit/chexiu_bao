@@ -136,3 +136,35 @@ def test_mp_me_receptionist_permissions(client):
     assert "work_order:create" in perms
     assert "settings:users" not in perms
     assert "user:create" not in perms
+
+
+def test_mp_douyin_login_unbound_then_bind(client):
+    login = client.post(
+        "/api/v1/mp/auth/login",
+        json={"code": "tt-dev-code-001", "client": "store", "platform": "douyin"},
+    )
+    assert login.status_code == 200
+    body = login.json()
+    assert body["code"] == 0
+    assert body["data"]["bound"] is False
+    assert body["data"]["openid"].startswith("mock_tt_")
+    bind_token = body["data"]["token"]
+
+    bind = client.post(
+        "/api/v1/mp/auth/bind",
+        json={
+            "username": "admin",
+            "password": "admin123",
+            "client": "store",
+            "platform": "douyin",
+        },
+        headers={"Authorization": f"Bearer {bind_token}"},
+    )
+    assert bind.status_code == 200
+    assert bind.json()["data"]["bound"] is True
+    assert bind.json()["data"]["user"]["username"] == "admin"
+
+    access = bind.json()["data"]["token"]
+    me = client.get("/api/v1/mp/auth/me", headers={"Authorization": f"Bearer {access}"})
+    assert me.status_code == 200
+    assert me.json()["data"]["permissions"]

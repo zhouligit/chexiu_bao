@@ -59,7 +59,11 @@ class WechatMpService:
             raise BadRequestError("微信登录服务暂不可用") from exc
 
         if data.get("errcode"):
-            raise BadRequestError(f"微信登录失败: {data.get('errmsg') or data.get('errcode')}")
+            msg = data.get("errmsg") or data.get("errcode")
+            hint = ""
+            if str(msg).lower().find("invalid code") >= 0:
+                hint = "（若在抖音端出现，请确认请求带 platform=douyin 且勿用微信 code2session）"
+            raise BadRequestError(f"微信登录失败: {msg}{hint}")
 
         openid = data.get("openid")
         if not openid:

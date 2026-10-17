@@ -27,8 +27,10 @@ def mp_bind(
         from app.core.exceptions import UnauthorizedError
 
         raise UnauthorizedError("请先完成微信登录")
-    openid = MpAuthService.resolve_openid_from_token(credentials.credentials)
-    result = MpAuthService.bind(db, data, openid)
+    openid, appid, token_platform = MpAuthService.resolve_bind_context(credentials.credentials)
+    platform = data.platform or token_platform
+    bind_data = data.model_copy(update={"platform": platform})
+    result = MpAuthService.bind(db, bind_data, openid, appid)
     return success(result.model_dump())
 
 

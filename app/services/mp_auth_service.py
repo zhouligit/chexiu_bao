@@ -9,7 +9,7 @@ from app.models.wechat_identity import WechatIdentity
 from app.schemas.auth import UserInfo
 from app.schemas.mp_auth import MpBindRequest, MpLoginRequest, MpLoginResponse
 from app.services.auth_service import AuthService
-from app.services.wechat_mp_service import WechatMpService
+from app.services.mp_platform_service import MpPlatformService
 
 
 class MpAuthService:
@@ -18,21 +18,29 @@ class MpAuthService:
         return AuthService.build_user_info(db, user)
 
     @staticmethod
-    def _access_token(user: User) -> str:
+    def _access_token(user: User, platform: str) -> str:
         extra = {
             "user_id": user.id,
             "store_id": user.store_id,
             "role": user.role,
             "client": "mp",
+            "platform": MpPlatformService.normalize_platform(platform),
         }
         return create_access_token(str(user.id), extra)
 
     @staticmethod
-    def _bind_token(openid: str, client: str) -> str:
+    def _bind_token(openid: str, *, client: str, platform: str, appid: str) -> str:
         """未绑定员工时签发，仅用于 /mp/auth/bind。"""
+        plat = MpPlatformService.normalize_platform(platform)
         return create_access_token(
             f"openid:{openid}",
-            {"type": "mp_bind", "openid": openid, "client": client},
+            {
+                "type": "mp_bind",
+                "openid": openid,
+                "client": client,
+                "platform": plat,
+                "appid": appid,
+            },
         )
 
     @staticmethod
@@ -42,8 +50,8 @@ class MpAuthService:
         openid: str,
         unionid: str,
         client: str,
+        appid: str,
     ) -> WechatIdentity:
-        appid = WechatMpService.appid()
         identity = (
             db.query(WechatIdentity)
             .filter(WechatIdentity.appid == appid, WechatIdentity.openid == openid)
@@ -67,12 +75,14 @@ class MpAuthService:
 
     @staticmethod
     def login(db: Session, data: MpLoginRequest) -> MpLoginResponse:
-        session = WechatMpService.code2session(data.code)
+        platform = MpPlatformService.normalize_platform(data.platform)
+        session = MpPlatformService.code2session(platform, data.code)
         openid = session["openid"]
         unionid = session.get("unionid") or ""
+        appid = MpPlatformService.appid(platform)
 
         identity = MpAuthService._get_or_create_identity(
-            db, openid=openid, unionid=unionid, client=data.client
+            db, openid=openid, unionid=unionid, client=data.client, appid=appid
         )
         db.commit()
         db.refresh(identity)
@@ -87,23 +97,29 @@ class MpAuthService:
                 user.last_login_at = datetime.now(timezone.utc)
                 db.commit()
                 return MpLoginResponse(
-                    token=MpAuthService._access_token(user),
+                    token=MpAuthService._access_token(user, platform),
                     bound=True,
                     user=MpAuthService._user_info(db, user),
                     openid=openid,
                 )
 
         return MpLoginResponse(
-            token=MpAuthService._bind_token(openid, data.client),
+            token=MpAuthService._bind_token(
+                openid, client=data.client, platform=platform, appid=appid
+            ),
             bound=False,
             user=None,
             openid=openid,
         )
 
     @staticmethod
-    def bind(db: Session, data: MpBindRequest, openid: str) -> MpLoginResponse:
+    def bind(db: Session, data: MpBindRequest, openid: str, appid: str) -> MpLoginResponse:
+        platform = MpPlatformService.normalize_platform(data.platform)
+        plat_label = MpPlatformService.platform_label(platform)
         if not openid:
-            raise UnauthorizedError("缺少微信身份，请重新登录")
+            raise UnauthorizedError(f"缺少{plat_label}身份，请重新登录")
+        if not appid:
+            appid = MpPlatformService.appid(platform)
 
         user = (
             db.query(User)
@@ -115,7 +131,6 @@ class MpAuthService:
         if user.status != 1:
             raise UnauthorizedError("账号已禁用")
 
-        appid = WechatMpService.appid()
         identity = (
             db.query(WechatIdentity)
             .filter(WechatIdentity.appid == appid, WechatIdentity.openid == openid)
@@ -130,7 +145,6 @@ class MpAuthService:
             db.add(identity)
             db.flush()
 
-        # 同一员工仅允许绑定一个 openid（同 appid）
         existing_user_bind = (
             db.query(WechatIdentity)
             .filter(
@@ -141,10 +155,12 @@ class MpAuthService:
             .first()
         )
         if existing_user_bind is not None:
-            raise BadRequestError("该账号已绑定其他微信，请先在 PC 端解绑或联系管理员")
+            raise BadRequestError(
+                f"该账号已绑定其他{plat_label}，请先在 PC 端解绑或联系管理员"
+            )
 
         if identity.user_id and identity.user_id != user.id:
-            raise BadRequestError("当前微信已绑定其他账号")
+            raise BadRequestError(f"当前{plat_label}已绑定其他账号")
 
         identity.user_id = user.id
         identity.store_id = user.store_id
@@ -154,26 +170,38 @@ class MpAuthService:
         db.refresh(user)
 
         return MpLoginResponse(
-            token=MpAuthService._access_token(user),
+            token=MpAuthService._access_token(user, platform),
             bound=True,
             user=MpAuthService._user_info(db, user),
             openid=openid,
         )
 
     @staticmethod
-    def resolve_openid_from_token(token: str) -> str:
+    def resolve_bind_context(token: str) -> tuple[str, str, str]:
+        """bind 阶段从 token 解析 openid、appid、platform。"""
         payload = decode_token(token)
-        # bind token: create_access_token extra 会把 type 覆盖为 mp_bind
         if payload.get("type") == "mp_bind" and payload.get("openid"):
-            return str(payload["openid"])
+            openid = str(payload["openid"])
+            platform = MpPlatformService.normalize_platform(str(payload.get("platform") or "weixin"))
+            appid = str(payload.get("appid") or "") or MpPlatformService.appid(platform)
+            return openid, appid, platform
         openid = payload.get("openid")
         if openid:
-            return str(openid)
+            platform = MpPlatformService.normalize_platform(str(payload.get("platform") or "weixin"))
+            appid = str(payload.get("appid") or "") or MpPlatformService.appid(platform)
+            return str(openid), appid, platform
         sub = str(payload.get("sub") or "")
         if sub.startswith("openid:"):
-            return sub[len("openid:") :]
-        raise UnauthorizedError("请先完成微信登录")
+            openid = sub[len("openid:") :]
+            platform = MpPlatformService.normalize_platform(str(payload.get("platform") or "weixin"))
+            appid = str(payload.get("appid") or "") or MpPlatformService.appid(platform)
+            return openid, appid, platform
+        raise UnauthorizedError("请先完成小程序登录")
 
+    @staticmethod
+    def resolve_openid_from_token(token: str) -> str:
+        openid, _, _ = MpAuthService.resolve_bind_context(token)
+        return openid
 
     @staticmethod
     def me(db: Session, user_id: int) -> UserInfo:

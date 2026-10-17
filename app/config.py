@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     wechat_mp_app_id: str | None = None
     wechat_mp_app_secret: str | None = None
 
+    # 抖音小程序（未配置 SECRET 时走 mock openid）
+    douyin_mp_app_id: str | None = None
+    douyin_mp_app_secret: str | None = None
+    douyin_mp_sandbox: bool = False
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
