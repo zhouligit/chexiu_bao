@@ -58,7 +58,11 @@ class DouyinMpService:
         err_no = payload.get("err_no", payload.get("error"))
         if err_no not in (0, None, "0"):
             tips = payload.get("err_tips") or payload.get("message") or str(err_no)
-            raise BadRequestError(f"抖音登录失败: {tips}")
+            extra = ""
+            tips_l = str(tips).lower()
+            if "bad code" in tips_l or "40018" in tips_l or "code错误" in str(tips):
+                extra = "；请确认服务器 DOUYIN_MP_APP_ID/SECRET 与开发者工具 AppID 一致并已重启 API"
+            raise BadRequestError(f"抖音登录失败: {tips}{extra}")
 
         data = payload.get("data") or {}
         openid = data.get("openid")
